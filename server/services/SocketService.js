@@ -45,32 +45,39 @@ class SocketService {
 
   // ============ 用户连接管理 ============
 
-  handleUserLogin(socket, data) {
-    const { userId, sessionId } = data;
-    
-    const session = this.db.getSession(sessionId);
-    if (!session || session.userId !== userId) {
-      socket.emit('error', { message: '会话无效' });
-      return;
+  async handleUserLogin(socket, data) {
+    try {
+      const { userId, sessionId } = data;
+      
+      // 验证会话
+      const validUserId = await this.db.validateSession(sessionId);
+      if (!validUserId || validUserId !== userId) {
+        socket.emit('error', { message: '会话无效' });
+        return;
+      }
+
+      // 获取用户信息
+      const user = await this.db.findUserByIdAsync(userId);
+      if (!user) {
+        socket.emit('error', { message: '用户不存在' });
+        return;
+      }
+
+      this.onlineUsers.set(socket.id, userId);
+      this.userSockets.set(userId, socket.id);
+
+      socket.emit('user:login:success', {
+        user: this.db.getSafeUser(user)
+      });
+
+      // 通知好友上线
+      await this.notifyFriendsOnline(userId, true);
+
+      console.log(`用户登录: ${user.username} (${userId})`);
+    } catch (error) {
+      console.error('Socket 用户登录错误:', error);
+      socket.emit('error', { message: '登录失败' });
     }
-
-    const user = this.db.findUserById(userId);
-    if (!user) {
-      socket.emit('error', { message: '用户不存在' });
-      return;
-    }
-
-    this.onlineUsers.set(socket.id, userId);
-    this.userSockets.set(userId, socket.id);
-
-    socket.emit('user:login:success', {
-      user: this.db.getSafeUser(user)
-    });
-
-    // 通知好友上线
-    this.notifyFriendsOnline(userId, true);
-
-    console.log(`用户登录: ${user.username} (${userId})`);
   }
 
   handleDisconnect(socket) {
@@ -93,11 +100,11 @@ class SocketService {
     }
   }
 
-  notifyFriendsOnline(userId, isOnline) {
-    const user = this.db.findUserById(userId);
+  async notifyFriendsOnline(userId, isOnline) {
+    const user = await this.db.findUserByIdAsync(userId);
     if (!user) return;
 
-    const friends = this.db.getFriends(userId);
+    const friends = await this.db.getFriends(userId);
     friends.forEach(friend => {
       const friendSocketId = this.userSockets.get(friend.id);
       if (friendSocketId) {
@@ -112,7 +119,7 @@ class SocketService {
 
   // ============ 好友系统 ============
 
-  handleFriendRequest(socket, data) {
+  async handleFriendRequest(socket, data) {
     const userId = this.onlineUsers.get(socket.id);
     if (!userId) {
       socket.emit('error', { message: '未登录' });
@@ -121,16 +128,23 @@ class SocketService {
 
     try {
       const { toUsername } = data;
-      const result = this.db.sendFriendRequest(userId, toUsername);
       
-      socket.emit('friend:request:sent', result);
+      // 根据用户名查找用户
+      const toUser = await this.db.findUserByUsername(toUsername);
+      if (!toUser) {
+        socket.emit('error', { message: '用户不存在' });
+        return;
+      }
+      
+      const result = await this.db.addFriend(userId, toUser.id);
+      
+      socket.emit('friend:request:sent', { success: true, message: '好友请求已发送' });
       
       // 通知对方
-      const toSocketId = this.userSockets.get(result.toUser.id);
+      const toSocketId = this.userSockets.get(toUser.id);
       if (toSocketId) {
-        const fromUser = this.db.findUserById(userId);
+        const fromUser = await this.db.findUserByIdAsync(userId);
         this.io.to(toSocketId).emit('friend:request:received', {
-          requestId: result.requestId,
           from: this.db.getSafeUser(fromUser)
         });
       }
@@ -181,12 +195,12 @@ class SocketService {
     }
   }
 
-  handleFriendList(socket) {
+  async handleFriendList(socket) {
     const userId = this.onlineUsers.get(socket.id);
     if (!userId) return;
 
     try {
-      const friends = this.db.getFriends(userId);
+      const friends = await this.db.getFriends(userId);
       
       // 添加在线状态
       const friendsWithStatus = friends.map(friend => ({
@@ -202,11 +216,11 @@ class SocketService {
 
   // ============ PVP 系统 ============
 
-  handlePvpMatch(socket, data) {
+  async handlePvpMatch(socket, data) {
     const userId = this.onlineUsers.get(socket.id);
     if (!userId) return;
 
-    const user = this.db.findUserById(userId);
+    const user = await this.db.findUserByIdAsync(userId);
     if (!user) return;
 
     // 检查是否已在队列中
@@ -254,11 +268,11 @@ class SocketService {
     return null;
   }
 
-  startPvpBattle(userId1, userId2) {
+  async startPvpBattle(userId1, userId2) {
     const battleId = `${userId1}_${userId2}_${Date.now()}`;
     
-    const user1 = this.db.findUserById(userId1);
-    const user2 = this.db.findUserById(userId2);
+    const user1 = await this.db.findUserByIdAsync(userId1);
+    const user2 = await this.db.findUserByIdAsync(userId2);
     
     const battle = {
       id: battleId,
@@ -309,7 +323,7 @@ class SocketService {
     setTimeout(() => this.checkTurnTimeout(battleId), 30000);
   }
 
-  handlePvpInvite(socket, data) {
+  async handlePvpInvite(socket, data) {
     const userId = this.onlineUsers.get(socket.id);
     if (!userId) return;
 
@@ -321,7 +335,7 @@ class SocketService {
       return;
     }
     
-    const user = this.db.findUserById(userId);
+    const user = await this.db.findUserByIdAsync(userId);
     this.io.to(friendSocketId).emit('pvp:invite:received', {
       from: this.db.getSafeUser(user),
       inviteId: `${userId}_${friendId}_${Date.now()}`
@@ -436,7 +450,7 @@ class SocketService {
     return false;
   }
 
-  endPvpBattle(battleId) {
+  async endPvpBattle(battleId) {
     const battle = this.activeBattles.get(battleId);
     if (!battle) return;
     
@@ -449,8 +463,8 @@ class SocketService {
     
     if (winner && loser) {
       // 更新战绩
-      const winnerUser = this.db.findUserById(winner[0]);
-      const loserUser = this.db.findUserById(loser[0]);
+      const winnerUser = await this.db.findUserByIdAsync(winner[0]);
+      const loserUser = await this.db.findUserByIdAsync(loser[0]);
       
       winnerUser.pvp.wins++;
       winnerUser.pvp.rating += 25;
@@ -536,11 +550,11 @@ class SocketService {
 
   // ============ 聊天系统 ============
 
-  handleChatMessage(socket, data) {
+  async handleChatMessage(socket, data) {
     const userId = this.onlineUsers.get(socket.id);
     if (!userId) return;
 
-    const user = this.db.findUserById(userId);
+    const user = await this.db.findUserByIdAsync(userId);
     const { to, message } = data;
     
     const toSocketId = this.userSockets.get(to);

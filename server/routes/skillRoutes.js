@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 
 // 获取技能列表
-router.get('/list', (req, res) => {
+router.get('/list', async (req, res) => {
   try {
     const { userId } = req.query;
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -32,7 +32,7 @@ router.get('/list', (req, res) => {
 });
 
 // 解锁技能
-router.post('/unlock', (req, res) => {
+router.post('/unlock', async (req, res) => {
   try {
     const { userId, skillId } = req.body;
     
@@ -52,7 +52,7 @@ router.post('/unlock', (req, res) => {
 });
 
 // 装备技能
-router.post('/equip', (req, res) => {
+router.post('/equip', async (req, res) => {
   try {
     const { userId, skillId, slotIndex } = req.body;
     
@@ -79,11 +79,11 @@ router.post('/equip', (req, res) => {
 });
 
 // 卸下技能
-router.post('/unequip', (req, res) => {
+router.post('/unequip', async (req, res) => {
   try {
     const { userId, slotIndex } = req.body;
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,

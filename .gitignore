@@ -1,8 +1,32 @@
+# Dependencies
 node_modules/
-dist/
+package-lock.json
+
+# Environment variables
 .env
+
+# Build output
+dist/
+build/
+
+# Logs
 *.log
-.DS_Store
+npm-debug.log*
+logs/
+
+# Editor directories and files
 .vscode/
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

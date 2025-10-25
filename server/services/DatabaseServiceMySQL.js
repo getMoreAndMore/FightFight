@@ -7,7 +7,6 @@ const db = require('../config/database');
  */
 class DatabaseService {
   constructor() {
-    this.ready = false;
     this.initializeDatabase();
   }
 
@@ -15,28 +14,10 @@ class DatabaseService {
     try {
       const connected = await db.testConnection();
       if (connected) {
-        this.ready = true;
         console.log('✅ DatabaseService (MySQL) 初始化完成');
-        return true;
-      } else {
-        console.error('❌ DatabaseService 初始化失败: 数据库连接失败');
-        return false;
       }
     } catch (error) {
       console.error('❌ DatabaseService 初始化失败:', error.message);
-      console.error('💡 提示: 请运行 npm run db:setup 创建数据库');
-      return false;
-    }
-  }
-
-  async waitForReady() {
-    let attempts = 0;
-    while (!this.ready && attempts < 10) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      attempts++;
-    }
-    if (!this.ready) {
-      throw new Error('数据库连接超时');
     }
   }
 
@@ -54,14 +35,6 @@ class DatabaseService {
       const userId = uuidv4();
       const sessionId = uuidv4();
 
-      // 计算初始战力
-      const { POWER_WEIGHTS } = require('../../shared/constants.cjs');
-      const initialPower = 10 * POWER_WEIGHTS.STRENGTH + 
-                          10 * POWER_WEIGHTS.AGILITY + 
-                          10 * POWER_WEIGHTS.INTELLIGENCE + 
-                          10 * POWER_WEIGHTS.ENDURANCE + 
-                          1 * POWER_WEIGHTS.LEVEL;
-
       await db.transaction(async (connection) => {
         // 1. 创建用户基本信息
         await connection.execute(
@@ -69,11 +42,11 @@ class DatabaseService {
           [userId, username, hashedPassword, email, sessionId]
         );
 
-        // 2. 创建用户档案（计算初始战力）
+        // 2. 创建用户档案
         await connection.execute(
           `INSERT INTO user_profiles (user_id, level, experience, attribute_points, power, stats) 
-           VALUES (?, 1, 0, 5, ?, ?)`,
-          [userId, initialPower, JSON.stringify({ loginCount: 0, questsCompleted: 0, minigamesCompleted: 0, pvpWins: 0, pvpLosses: 0 })]
+           VALUES (?, 1, 0, 5, 0, ?)`,
+          [userId, JSON.stringify({ loginCount: 0, questsCompleted: 0, minigamesCompleted: 0, pvpWins: 0, pvpLosses: 0 })]
         );
 
         // 3. 创建用户属性
@@ -323,11 +296,11 @@ class DatabaseService {
     if (!user || !user.attributes) return 0;
 
     return Math.floor(
-      user.attributes.strength * POWER_WEIGHTS.STRENGTH +
-      user.attributes.agility * POWER_WEIGHTS.AGILITY +
-      user.attributes.intelligence * POWER_WEIGHTS.INTELLIGENCE +
-      user.attributes.endurance * POWER_WEIGHTS.ENDURANCE +
-      user.level * POWER_WEIGHTS.LEVEL
+      user.attributes.strength * POWER_WEIGHTS.strength +
+      user.attributes.agility * POWER_WEIGHTS.agility +
+      user.attributes.intelligence * POWER_WEIGHTS.intelligence +
+      user.attributes.endurance * POWER_WEIGHTS.endurance +
+      user.level * POWER_WEIGHTS.level
     );
   }
 
@@ -343,25 +316,8 @@ class DatabaseService {
       const user = await this.findUserByIdAsync(userId);
       if (!user) throw new Error('用户不存在');
 
-      const oldExp = user.experience;
-      const oldLevel = user.level;
       user.experience += exp;
-      
-      console.log(`📊 [${user.username}] 经验变化: ${oldExp} + ${exp} = ${user.experience}`);
-      
-      // 检查升级（如果升级，会在内部更新数据库）
       const levelUpInfo = await this.checkLevelUp(user);
-      
-      // 如果没有升级，也要保存经验值到数据库
-      if (!levelUpInfo.leveled) {
-        await db.query(
-          'UPDATE user_profiles SET experience = ? WHERE user_id = ?',
-          [user.experience, user.id]
-        );
-        console.log(`💾 [${user.username}] 保存经验到数据库: ${user.experience}`);
-      } else {
-        console.log(`🎉 [${user.username}] 升级! ${oldLevel} → ${user.level}, 剩余经验: ${user.experience}`);
-      }
 
       return { user: this.getSafeUser(user), ...levelUpInfo };
     } catch (error) {
@@ -384,8 +340,6 @@ class DatabaseService {
 
     while (user.level < LEVEL_CONFIG.MAX_LEVEL) {
       const requiredExp = this.getExpForLevel(user.level + 1);
-      console.log(`🔍 [${user.username}] 检查升级: Lv.${user.level}, 当前经验 ${user.experience}/${requiredExp}`);
-      
       if (user.experience >= requiredExp) {
         user.level++;
         user.experience -= requiredExp;

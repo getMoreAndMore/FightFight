@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 // 添加属性点
-router.post('/add', (req, res) => {
+router.post('/add', async (req, res) => {
   try {
     const { userId, attribute, points } = req.body;
     
@@ -21,10 +21,10 @@ router.post('/add', (req, res) => {
       });
     }
     
-    const user = req.db.addAttribute(userId, attribute, points);
+    const user = await req.db.addAttribute(userId, attribute, points);
     
     // 更新排行榜
-    req.db.updateRankings();
+    await req.db.updateRankings();
     
     res.json({
       success: true,
@@ -32,6 +32,7 @@ router.post('/add', (req, res) => {
       message: '属性添加成功'
     });
   } catch (error) {
+    console.error('加点错误:', error);
     res.status(400).json({
       success: false,
       message: error.message
@@ -40,11 +41,11 @@ router.post('/add', (req, res) => {
 });
 
 // 重置属性点（需要消耗道具或货币）
-router.post('/reset', (req, res) => {
+router.post('/reset', async (req, res) => {
   try {
     const { userId } = req.body;
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,

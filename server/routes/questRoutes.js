@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 
 // 获取任务列表
-router.get('/get', (req, res) => {
+router.get('/get', async (req, res) => {
   try {
     const { userId, type } = req.query;
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -45,11 +45,11 @@ router.get('/get', (req, res) => {
 });
 
 // 完成任务
-router.post('/complete', (req, res) => {
+router.post('/complete', async (req, res) => {
   try {
     const { userId, questId } = req.body;
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -97,7 +97,7 @@ router.post('/complete', (req, res) => {
     let levelUpInfo = { leveled: false };
     
     if (rewards.exp) {
-      levelUpInfo = req.db.addExperience(userId, rewards.exp);
+      levelUpInfo = await req.db.addExperienceAsync(userId, rewards.exp);
     }
     
     if (rewards.attributePoints) {
@@ -114,10 +114,10 @@ router.post('/complete', (req, res) => {
     quest.completedAt = Date.now();
     
     // 获取最新的用户数据
-    const finalUser = req.db.findUserById(userId);
+    const finalUser = await req.db.findUserByIdAsync(userId);
     
     // 更新排行榜
-    req.db.updateRankings();
+    await req.db.updateRankings();
     
     res.json({
       success: true,
@@ -135,11 +135,11 @@ router.post('/complete', (req, res) => {
 });
 
 // 刷新每日任务
-router.post('/refresh-daily', (req, res) => {
+router.post('/refresh-daily', async (req, res) => {
   try {
     const { userId } = req.body;
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,

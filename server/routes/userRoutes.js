@@ -13,14 +13,19 @@ router.post('/register', async (req, res) => {
       });
     }
     
-    const user = await req.db.createUser(username, password, email);
+    const { userId, sessionId } = await req.db.createUser(username, password, email);
+    
+    // 获取完整用户信息
+    const user = await req.db.findUserByIdAsync(userId);
     
     res.json({
       success: true,
-      user,
+      user: req.db.getSafeUser(user),
+      sessionId,
       message: '注册成功'
     });
   } catch (error) {
+    console.error('注册错误:', error);
     res.status(400).json({
       success: false,
       message: error.message
@@ -33,23 +38,26 @@ router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
-    const user = req.db.findUserByUsername(username);
-    if (!user) {
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        message: '用户名和密码不能为空'
+      });
+    }
+    
+    // 验证用户凭证
+    const result = await req.db.validateCredentials(username, password);
+    if (!result) {
       return res.status(401).json({
         success: false,
         message: '用户名或密码错误'
       });
     }
     
-    const isValid = await req.db.verifyPassword(password, user.password);
-    if (!isValid) {
-      return res.status(401).json({
-        success: false,
-        message: '用户名或密码错误'
-      });
-    }
+    const { userId, sessionId } = result;
     
-    const sessionId = req.db.createSession(user.id, null);
+    // 获取完整用户信息
+    const user = await req.db.findUserByIdAsync(userId);
     
     res.json({
       success: true,
@@ -58,6 +66,7 @@ router.post('/login', async (req, res) => {
       message: '登录成功'
     });
   } catch (error) {
+    console.error('登录错误:', error);
     res.status(400).json({
       success: false,
       message: error.message
@@ -66,7 +75,7 @@ router.post('/login', async (req, res) => {
 });
 
 // 获取个人信息
-router.get('/profile', (req, res) => {
+router.get('/profile', async (req, res) => {
   try {
     const { userId } = req.query;
     
@@ -77,7 +86,7 @@ router.get('/profile', (req, res) => {
       });
     }
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -90,6 +99,7 @@ router.get('/profile', (req, res) => {
       user: req.db.getSafeUser(user)
     });
   } catch (error) {
+    console.error('获取用户信息错误:', error);
     res.status(400).json({
       success: false,
       message: error.message
@@ -98,57 +108,27 @@ router.get('/profile', (req, res) => {
 });
 
 // 每日签到
-router.post('/checkin', (req, res) => {
+router.post('/checkin', async (req, res) => {
   try {
     const { userId } = req.body;
     
-    const user = req.db.findUserById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: '用户不存在'
-      });
-    }
-    
-    const now = Date.now();
-    const lastCheckin = user.dailyCheckin.lastCheckin;
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    
-    // 检查是否已签到
-    if (now - lastCheckin < oneDayMs) {
+    if (!userId) {
       return res.status(400).json({
         success: false,
-        message: '今日已签到'
+        message: '缺少用户ID'
       });
     }
     
-    // 连续签到检查
-    if (now - lastCheckin < 2 * oneDayMs) {
-      user.dailyCheckin.consecutiveDays++;
-    } else {
-      user.dailyCheckin.consecutiveDays = 1;
-    }
-    
-    user.dailyCheckin.lastCheckin = now;
-    
-    // 签到奖励
-    const rewards = {
-      exp: 50 + user.dailyCheckin.consecutiveDays * 10,
-      attributePoints: Math.floor(user.dailyCheckin.consecutiveDays / 7)
-    };
-    
-    req.db.addExperience(userId, rewards.exp);
-    if (rewards.attributePoints > 0) {
-      user.attributePoints += rewards.attributePoints;
-    }
+    const result = await req.db.dailyCheckin(userId);
     
     res.json({
       success: true,
-      consecutiveDays: user.dailyCheckin.consecutiveDays,
-      rewards,
-      message: `连续签到 ${user.dailyCheckin.consecutiveDays} 天！`
+      consecutiveDays: result.consecutiveDays,
+      reward: result.reward,
+      message: result.message
     });
   } catch (error) {
+    console.error('签到错误:', error);
     res.status(400).json({
       success: false,
       message: error.message

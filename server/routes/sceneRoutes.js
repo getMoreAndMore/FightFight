@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 
 // 获取场景列表
-router.get('/list', (req, res) => {
+router.get('/list', async (req, res) => {
   try {
     const { userId } = req.query;
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -31,7 +31,7 @@ router.get('/list', (req, res) => {
 });
 
 // 进入场景
-router.post('/enter', (req, res) => {
+router.post('/enter', async (req, res) => {
   try {
     const { userId, sceneId } = req.body;
     
@@ -51,11 +51,11 @@ router.post('/enter', (req, res) => {
 });
 
 // 完成小游戏
-router.post('/complete', (req, res) => {
+router.post('/complete', async (req, res) => {
   try {
     const { userId, sceneId, minigameId, score } = req.body;
     
-    let user = req.db.findUserById(userId);
+    let user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -69,7 +69,7 @@ router.post('/complete', (req, res) => {
     const totalExp = baseExp + bonusExp;
     
     // 添加经验
-    const levelUpInfo = req.db.addExperience(userId, totalExp);
+    const levelUpInfo = await req.db.addExperienceAsync(userId, totalExp);
     
     // 随机掉落道具
     const rewards = {
@@ -96,10 +96,10 @@ router.post('/complete', (req, res) => {
     user.stats.minigamesCompleted = (user.stats.minigamesCompleted || 0) + 1;
     
     // 获取最新的用户数据
-    const finalUser = req.db.findUserById(userId);
+    const finalUser = await req.db.findUserByIdAsync(userId);
     
     // 更新排行榜
-    req.db.updateRankings();
+    await req.db.updateRankings();
     
     res.json({
       success: true,

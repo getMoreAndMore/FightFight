@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 
 // 获取成就列表
-router.get('/get', (req, res) => {
+router.get('/get', async (req, res) => {
   try {
     const { userId } = req.query;
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -30,11 +30,11 @@ router.get('/get', (req, res) => {
 });
 
 // 领取成就奖励
-router.post('/claim', (req, res) => {
+router.post('/claim', async (req, res) => {
   try {
     const { userId, achievementId } = req.body;
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -64,7 +64,7 @@ router.post('/claim', (req, res) => {
     
     if (achievementConfig && achievementConfig.rewards) {
       if (achievementConfig.rewards.exp) {
-        levelUpInfo = req.db.addExperience(userId, achievementConfig.rewards.exp);
+        levelUpInfo = await req.db.addExperienceAsync(userId, achievementConfig.rewards.exp);
       }
       if (achievementConfig.rewards.attributePoints) {
         user.attributePoints += achievementConfig.rewards.attributePoints;
@@ -75,10 +75,10 @@ router.post('/claim', (req, res) => {
     achievement.claimedAt = Date.now();
     
     // 获取最新的用户数据
-    const finalUser = req.db.findUserById(userId);
+    const finalUser = await req.db.findUserByIdAsync(userId);
     
     // 更新排行榜
-    req.db.updateRankings();
+    await req.db.updateRankings();
     
     res.json({
       success: true,

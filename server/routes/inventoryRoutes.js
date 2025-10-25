@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 
 // 获取背包
-router.get('/get', (req, res) => {
+router.get('/get', async (req, res) => {
   try {
     const { userId } = req.query;
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -27,7 +27,7 @@ router.get('/get', (req, res) => {
 });
 
 // 使用物品
-router.post('/use', (req, res) => {
+router.post('/use', async (req, res) => {
   try {
     const { userId, instanceId } = req.body;
     
@@ -47,7 +47,7 @@ router.post('/use', (req, res) => {
 });
 
 // 丢弃物品
-router.post('/drop', (req, res) => {
+router.post('/drop', async (req, res) => {
   try {
     const { userId, instanceId, quantity } = req.body;
     
@@ -67,11 +67,11 @@ router.post('/drop', (req, res) => {
 });
 
 // 整理背包
-router.post('/sort', (req, res) => {
+router.post('/sort', async (req, res) => {
   try {
     const { userId, sortBy } = req.body;
     
-    const user = req.db.findUserById(userId);
+    const user = await req.db.findUserByIdAsync(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
