@@ -1,0 +1,181 @@
+[
+  {
+    "id": "achievement_level_5",
+    "name": "初出茅庐",
+    "description": "达到5级",
+    "type": "level",
+    "requirement": 5,
+    "rewards": {
+      "exp": 100,
+      "attributePoints": 2
+    },
+    "icon": "level_5"
+  },
+  {
+    "id": "achievement_level_10",
+    "name": "小有成就",
+    "description": "达到10级",
+    "type": "level",
+    "requirement": 10,
+    "rewards": {
+      "exp": 300,
+      "attributePoints": 5
+    },
+    "icon": "level_10"
+  },
+  {
+    "id": "achievement_level_20",
+    "name": "资深冒险者",
+    "description": "达到20级",
+    "type": "level",
+    "requirement": 20,
+    "rewards": {
+      "exp": 1000,
+      "attributePoints": 10
+    },
+    "icon": "level_20"
+  },
+  {
+    "id": "achievement_str_50",
+    "name": "力大无穷",
+    "description": "力量达到50",
+    "type": "attribute",
+    "attribute": "strength",
+    "requirement": 50,
+    "rewards": {
+      "exp": 500
+    },
+    "icon": "strength"
+  },
+  {
+    "id": "achievement_agi_50",
+    "name": "迅捷如风",
+    "description": "敏捷达到50",
+    "type": "attribute",
+    "attribute": "agility",
+    "requirement": 50,
+    "rewards": {
+      "exp": 500
+    },
+    "icon": "agility"
+  },
+  {
+    "id": "achievement_int_50",
+    "name": "智者",
+    "description": "智力达到50",
+    "type": "attribute",
+    "attribute": "intelligence",
+    "requirement": 50,
+    "rewards": {
+      "exp": 500
+    },
+    "icon": "intelligence"
+  },
+  {
+    "id": "achievement_end_50",
+    "name": "坚韧不拔",
+    "description": "耐力达到50",
+    "type": "attribute",
+    "attribute": "endurance",
+    "requirement": 50,
+    "rewards": {
+      "exp": 500
+    },
+    "icon": "endurance"
+  },
+  {
+    "id": "achievement_pvp_10",
+    "name": "新手决斗士",
+    "description": "赢得10场PVP对战",
+    "type": "pvp",
+    "requirement": 10,
+    "rewards": {
+      "exp": 500,
+      "attributePoints": 3
+    },
+    "icon": "pvp_10"
+  },
+  {
+    "id": "achievement_pvp_50",
+    "name": "角斗场冠军",
+    "description": "赢得50场PVP对战",
+    "type": "pvp",
+    "requirement": 50,
+    "rewards": {
+      "exp": 2000,
+      "attributePoints": 10
+    },
+    "icon": "pvp_50"
+  },
+  {
+    "id": "achievement_explore_all",
+    "name": "探索家",
+    "description": "解锁所有场景",
+    "type": "exploration",
+    "requirement": 5,
+    "rewards": {
+      "exp": 1500,
+      "attributePoints": 8
+    },
+    "icon": "explorer"
+  },
+  {
+    "id": "achievement_minigames_50",
+    "name": "游戏达人",
+    "description": "完成50次小游戏",
+    "type": "collection",
+    "requirement": 50,
+    "rewards": {
+      "exp": 800
+    },
+    "icon": "gamer"
+  },
+  {
+    "id": "achievement_items_100",
+    "name": "收藏家",
+    "description": "收集100个道具",
+    "type": "collection",
+    "requirement": 100,
+    "rewards": {
+      "exp": 1000,
+      "attributePoints": 5
+    },
+    "icon": "collector"
+  },
+  {
+    "id": "achievement_friends_10",
+    "name": "好人缘",
+    "description": "添加10个好友",
+    "type": "social",
+    "requirement": 10,
+    "rewards": {
+      "exp": 500
+    },
+    "icon": "friends"
+  },
+  {
+    "id": "achievement_checkin_7",
+    "name": "坚持不懈",
+    "description": "连续签到7天",
+    "type": "daily",
+    "requirement": 7,
+    "rewards": {
+      "exp": 500,
+      "attributePoints": 3
+    },
+    "icon": "checkin"
+  },
+  {
+    "id": "achievement_checkin_30",
+    "name": "忠实玩家",
+    "description": "连续签到30天",
+    "type": "daily",
+    "requirement": 30,
+    "rewards": {
+      "exp": 3000,
+      "attributePoints": 15
+    },
+    "icon": "loyal"
+  }
+]
+

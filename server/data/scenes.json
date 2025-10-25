@@ -1,0 +1,220 @@
+[
+  {
+    "id": "town",
+    "name": "新手村",
+    "unlockLevel": 1,
+    "description": "宁静的新手村，冒险的起点",
+    "bgColor": "#87CEEB",
+    "minigames": [
+      {
+        "id": "town_click",
+        "name": "采集木材",
+        "type": "click",
+        "description": "快速点击采集木材",
+        "difficulty": 1,
+        "rewards": {
+          "exp": 30,
+          "items": ["wood"]
+        }
+      },
+      {
+        "id": "town_timing",
+        "name": "钓鱼",
+        "type": "timing",
+        "description": "在正确时机按下按钮钓鱼",
+        "difficulty": 1,
+        "rewards": {
+          "exp": 40,
+          "items": ["fish"]
+        }
+      }
+    ],
+    "npcs": [
+      {
+        "id": "blacksmith",
+        "name": "铁匠",
+        "dialog": "欢迎来到新手村！"
+      }
+    ]
+  },
+  {
+    "id": "forest",
+    "name": "迷雾森林",
+    "unlockLevel": 3,
+    "description": "充满神秘的森林",
+    "bgColor": "#228B22",
+    "minigames": [
+      {
+        "id": "forest_collect",
+        "name": "采集草药",
+        "type": "collect",
+        "description": "在限定时间内收集草药",
+        "difficulty": 2,
+        "rewards": {
+          "exp": 60,
+          "items": ["herb"]
+        }
+      },
+      {
+        "id": "forest_puzzle",
+        "name": "迷阵",
+        "type": "puzzle",
+        "description": "解开森林迷阵",
+        "difficulty": 2,
+        "rewards": {
+          "exp": 80,
+          "items": ["treasure_box"]
+        }
+      }
+    ],
+    "monsters": [
+      {
+        "id": "slime",
+        "name": "史莱姆",
+        "level": 3,
+        "hp": 50,
+        "attack": 10
+      }
+    ]
+  },
+  {
+    "id": "cave",
+    "name": "水晶洞穴",
+    "unlockLevel": 7,
+    "description": "闪烁着水晶光芒的洞穴",
+    "bgColor": "#4B0082",
+    "minigames": [
+      {
+        "id": "cave_click",
+        "name": "挖掘水晶",
+        "type": "click",
+        "description": "快速点击挖掘水晶",
+        "difficulty": 3,
+        "rewards": {
+          "exp": 100,
+          "items": ["crystal"]
+        }
+      },
+      {
+        "id": "cave_timing",
+        "name": "躲避落石",
+        "type": "timing",
+        "description": "精准时机躲避落石",
+        "difficulty": 3,
+        "rewards": {
+          "exp": 120,
+          "items": ["rare_ore"]
+        }
+      }
+    ],
+    "monsters": [
+      {
+        "id": "bat",
+        "name": "蝙蝠",
+        "level": 7,
+        "hp": 80,
+        "attack": 18
+      }
+    ]
+  },
+  {
+    "id": "mountain",
+    "name": "雪山",
+    "unlockLevel": 12,
+    "description": "终年积雪的高山",
+    "bgColor": "#FFFFFF",
+    "minigames": [
+      {
+        "id": "mountain_collect",
+        "name": "采集雪莲",
+        "type": "collect",
+        "description": "在雪山上采集珍贵的雪莲",
+        "difficulty": 4,
+        "rewards": {
+          "exp": 150,
+          "items": ["snow_lotus"]
+        }
+      },
+      {
+        "id": "mountain_puzzle",
+        "name": "雪山迷宫",
+        "type": "puzzle",
+        "description": "穿越雪山迷宫",
+        "difficulty": 4,
+        "rewards": {
+          "exp": 180,
+          "items": ["ancient_scroll"]
+        }
+      }
+    ],
+    "monsters": [
+      {
+        "id": "yeti",
+        "name": "雪怪",
+        "level": 12,
+        "hp": 150,
+        "attack": 30
+      }
+    ]
+  },
+  {
+    "id": "dungeon",
+    "name": "暗影地下城",
+    "unlockLevel": 18,
+    "description": "危险的地下城",
+    "bgColor": "#1C1C1C",
+    "minigames": [
+      {
+        "id": "dungeon_click",
+        "name": "击破魔法阵",
+        "type": "click",
+        "description": "快速点击击破魔法阵",
+        "difficulty": 5,
+        "rewards": {
+          "exp": 250,
+          "items": ["magic_stone"]
+        }
+      },
+      {
+        "id": "dungeon_timing",
+        "name": "陷阱迷宫",
+        "type": "timing",
+        "description": "穿越致命陷阱",
+        "difficulty": 5,
+        "rewards": {
+          "exp": 300,
+          "items": ["legendary_weapon"]
+        }
+      },
+      {
+        "id": "dungeon_puzzle",
+        "name": "终极试炼",
+        "type": "puzzle",
+        "description": "最终的智慧考验",
+        "difficulty": 5,
+        "rewards": {
+          "exp": 500,
+          "items": ["epic_treasure"]
+        }
+      }
+    ],
+    "monsters": [
+      {
+        "id": "demon",
+        "name": "恶魔",
+        "level": 18,
+        "hp": 300,
+        "attack": 50
+      }
+    ],
+    "boss": {
+      "id": "shadow_lord",
+      "name": "暗影领主",
+      "level": 20,
+      "hp": 1000,
+      "attack": 80,
+      "skills": ["dark_blast", "shadow_strike"]
+    }
+  }
+]
+
