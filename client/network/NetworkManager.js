@@ -209,6 +209,13 @@ export class NetworkManager {
 
     this.socket.on('error', (error) => {
       console.error('Socket 错误:', error);
+      // 如果error是对象，尝试提取message
+      const errorMessage = error && error.message ? error.message : (typeof error === 'string' ? error : JSON.stringify(error));
+      console.error('错误详情:', errorMessage);
+      // 显示错误通知
+      if (window.uiManager && window.uiManager.showNotification) {
+        window.uiManager.showNotification(errorMessage);
+      }
       this.emit('socket:error', error);
     });
 
@@ -222,6 +229,11 @@ export class NetworkManager {
     });
 
     // 好友事件
+    this.socket.on('friend:request:sent', (data) => {
+      console.log('✅ 好友请求已发送:', data);
+      this.emit('friend:request:sent', data);
+    });
+
     this.socket.on('friend:request:received', (data) => {
       this.emit('friend:request:received', data);
     });

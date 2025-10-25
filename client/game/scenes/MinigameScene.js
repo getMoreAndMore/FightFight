@@ -487,8 +487,8 @@ export class MinigameScene extends Phaser.Scene {
         
         // 直接使用服务器返回的最新用户数据
         if (result.success && result.user) {
-          // 更新游戏状态
-          window.gameState.user = result.user;
+          // 更新游戏状态并保存到localStorage
+          window.gameState.setUser(result.user);
           
           // 如果升级了，显示详细升级信息
           if (result.leveled) {

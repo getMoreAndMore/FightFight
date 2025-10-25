@@ -53,6 +53,9 @@ class DatabaseService {
       const hashedPassword = await bcrypt.hash(password, 10);
       const userId = uuidv4();
       const sessionId = uuidv4();
+      
+      // 将空字符串的 email 转换为 NULL（MySQL UNIQUE 约束允许多个 NULL，但不允许多个空字符串）
+      const emailValue = email && email.trim() !== '' ? email.trim() : null;
 
       // 计算初始战力
       const { POWER_WEIGHTS } = require('../../shared/constants.cjs');
@@ -66,7 +69,7 @@ class DatabaseService {
         // 1. 创建用户基本信息
         await connection.execute(
           'INSERT INTO users (id, username, password, email, session_id) VALUES (?, ?, ?, ?, ?)',
-          [userId, username, hashedPassword, email, sessionId]
+          [userId, username, hashedPassword, emailValue, sessionId]
         );
 
         // 2. 创建用户档案（计算初始战力）
@@ -184,16 +187,16 @@ class DatabaseService {
       username: user.username,
       email: user.email,
       sessionId: user.session_id,
-      level: user.level || 1,
-      experience: user.experience || 0,
-      attributePoints: user.attribute_points || 5,
-      power: user.power || 0,
+      level: user.level ?? 1,
+      experience: user.experience ?? 0,
+      attributePoints: user.attribute_points ?? 5,  // 使用 ?? 而不是 ||，避免0被当作假值
+      power: user.power ?? 0,
       currentScene: user.current_scene || 'forest',
       attributes: {
-        strength: user.strength || 10,
-        agility: user.agility || 10,
-        intelligence: user.intelligence || 10,
-        endurance: user.endurance || 10
+        strength: user.strength ?? 10,
+        agility: user.agility ?? 10,
+        intelligence: user.intelligence ?? 10,
+        endurance: user.endurance ?? 10
       },
       inventory: {
         slots: user.slots || 10,
@@ -211,14 +214,38 @@ class DatabaseService {
       },
       achievements: this.parseJSON(user.achievements, []),
       stats: this.parseJSON(user.stats, { loginCount: 0, questsCompleted: 0, minigamesCompleted: 0, pvpWins: 0, pvpLosses: 0 }),
-      dailyCheckin: user.checkin_last_date ? {
-        lastDate: user.checkin_last_date,
+      dailyCheckin: {
+        lastDate: user.checkin_last_date ? this.formatDate(user.checkin_last_date) : null,
         consecutiveDays: user.checkin_consecutive_days || 0,
         totalDays: user.checkin_total_days || 0
-      } : null,
+      },
       friends: [],
       createdAt: user.created_at
     };
+  }
+
+  /**
+   * 将日期格式化为 YYYY-MM-DD 字符串
+   * @param {Date|string} date - 日期对象或字符串
+   * @returns {string|null} 格式化后的日期字符串
+   */
+  formatDate(date) {
+    if (!date) return null;
+    try {
+      // 如果已经是 YYYY-MM-DD 格式的字符串，直接返回
+      if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return date;
+      }
+      // 转换为 Date 对象并格式化
+      const d = new Date(date);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch (error) {
+      console.error('日期格式化失败:', error.message, date);
+      return null;
+    }
   }
 
   parseJSON(value, defaultValue = null) {
@@ -287,33 +314,84 @@ class DatabaseService {
   async addAttribute(userId, attributeName, points) {
     try {
       const user = await this.findUserByIdAsync(userId);
-      if (!user) throw new Error('用户不存在');
-      if (user.attributePoints < points) throw new Error('属性点不足');
+      if (!user) {
+        console.error('❌ [加点] 用户不存在:', userId);
+        throw new Error('用户不存在');
+      }
+      
+      console.log(`📊 [加点] 用户:${user.username}, 属性:${attributeName}, 请求加点:${points}, 当前可用点:${user.attributePoints}`);
+      
+      if (user.attributePoints < points) {
+        console.error(`❌ [加点] 属性点不足: 需要${points}点, 实际只有${user.attributePoints}点`);
+        throw new Error('属性点不足');
+      }
 
-      await db.query(
-        `UPDATE user_attributes SET ${attributeName} = ${attributeName} + ? WHERE user_id = ?`,
-        [points, userId]
-      );
+      // 使用事务确保原子性
+      await db.transaction(async (connection) => {
+        // 1. 更新属性值
+        await connection.execute(
+          `UPDATE user_attributes SET ${attributeName} = ${attributeName} + ? WHERE user_id = ?`,
+          [points, userId]
+        );
 
-      await db.query(
-        'UPDATE user_profiles SET attribute_points = attribute_points - ? WHERE user_id = ?',
-        [points, userId]
-      );
+        // 2. 减少属性点（添加约束：确保不会变成负数）
+        const [result] = await connection.execute(
+          'UPDATE user_profiles SET attribute_points = attribute_points - ? WHERE user_id = ? AND attribute_points >= ?',
+          [points, userId, points]
+        );
 
-      // 重新计算战力
-      const updatedUser = await this.findUserByIdAsync(userId);
-      const power = this.calculatePower(updatedUser);
-      await db.query(
-        'UPDATE user_profiles SET power = ? WHERE user_id = ?',
-        [power, userId]
-      );
+        // 检查是否成功更新（如果属性点不足，affectedRows为0）
+        if (result.affectedRows === 0) {
+          console.error(`❌ [加点] 数据库更新失败: affectedRows=0, 这可能是并发冲突`);
+          // 重新查询当前属性点
+          const [currentUser] = await connection.execute(
+            'SELECT attribute_points FROM user_profiles WHERE user_id = ?',
+            [userId]
+          );
+          if (currentUser.length > 0) {
+            console.error(`❌ [加点] 当前数据库中的属性点: ${currentUser[0].attribute_points}`);
+          }
+          throw new Error('属性点不足或并发冲突');
+        }
+        
+        console.log(`💾 [加点] 数据库更新成功, affectedRows=${result.affectedRows}`);
+
+        // 3. 重新计算战力
+        const [userRows] = await connection.execute(
+          `SELECT p.*, a.strength, a.agility, a.intelligence, a.endurance
+           FROM user_profiles p
+           LEFT JOIN user_attributes a ON p.user_id = a.user_id
+           WHERE p.user_id = ?`,
+          [userId]
+        );
+
+        if (userRows.length > 0) {
+          const tempUser = {
+            level: userRows[0].level,
+            attributes: {
+              strength: userRows[0].strength,
+              agility: userRows[0].agility,
+              intelligence: userRows[0].intelligence,
+              endurance: userRows[0].endurance
+            }
+          };
+          const power = this.calculatePower(tempUser);
+          
+          await connection.execute(
+            'UPDATE user_profiles SET power = ? WHERE user_id = ?',
+            [power, userId]
+          );
+          
+          console.log(`✅ [加点] 成功! 剩余点:${userRows[0].attribute_points - points}, 战力:${power}`);
+        }
+      });
 
       // 更新排行榜
       await this.updateRankings();
 
       return this.getSafeUser(await this.findUserByIdAsync(userId));
     } catch (error) {
-      console.error('加点失败:', error.message);
+      console.error('❌ [加点失败]:', error.message);
       throw error;
     }
   }
@@ -545,32 +623,74 @@ class DatabaseService {
       const user = await this.findUserByIdAsync(userId);
       if (!user) throw new Error('用户不存在');
 
-      const today = new Date().toISOString().split('T')[0];
-      const lastDate = user.dailyCheckin?.lastDate ? new Date(user.dailyCheckin.lastDate).toISOString().split('T')[0] : null;
+      // 获取今天的日期（YYYY-MM-DD格式）
+      const today = this.formatDate(new Date());
+      
+      // 获取上次签到日期（已经是格式化的 YYYY-MM-DD 字符串）
+      const lastDate = user.dailyCheckin?.lastDate || null;
 
+      console.log(`📅 [签到检查] 用户: ${user.username}, 今天: ${today}, 上次签到: ${lastDate}, lastDate类型: ${typeof lastDate}`);
+
+      // 检查今天是否已经签到
       if (lastDate === today) {
+        console.log(`⚠️ [签到失败] 用户 ${user.username} 今天已经签到过了`);
         throw new Error('今天已经签到过了');
       }
 
+      // 计算连续签到天数
       let consecutiveDays = 1;
-      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const yesterday = this.formatDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
       
       if (lastDate === yesterday) {
-        consecutiveDays = (user.dailyCheckin?.consecutiveDays || 0) + 1;
+        // 昨天签到了，连续天数+1
+        consecutiveDays = (user.dailyCheckin.consecutiveDays || 0) + 1;
+        console.log(`✅ [连续签到] 用户 ${user.username} 连续签到 ${consecutiveDays} 天`);
+      } else if (lastDate) {
+        // 断签了，重新计数
+        console.log(`⚠️ [签到中断] 用户 ${user.username} 签到中断，重新开始计数`);
       }
 
-      const totalDays = (user.dailyCheckin?.totalDays || 0) + 1;
+      const totalDays = (user.dailyCheckin.totalDays || 0) + 1;
       const reward = Math.min(consecutiveDays, 7);
 
-      await db.query(
-        `UPDATE user_checkin SET last_date = ?, consecutive_days = ?, total_days = ? WHERE user_id = ?`,
-        [today, consecutiveDays, totalDays, userId]
+      // 更新或插入签到记录（使用 INSERT ... ON DUPLICATE KEY UPDATE 确保记录存在）
+      const updateResult = await db.query(
+        `INSERT INTO user_checkin (user_id, last_date, consecutive_days, total_days)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE 
+           last_date = VALUES(last_date),
+           consecutive_days = VALUES(consecutive_days),
+           total_days = VALUES(total_days)`,
+        [userId, today, consecutiveDays, totalDays]
       );
 
-      await db.query(
+      console.log(`💾 [数据库更新] 签到记录已保存，影响行数: ${updateResult.affectedRows}`);
+      
+      if (updateResult.affectedRows === 0) {
+        console.error(`⚠️ [警告] 用户 ${user.username} 的签到记录更新失败！`);
+        throw new Error('签到记录更新失败');
+      }
+
+      // 更新属性点
+      const rewardResult = await db.query(
         `UPDATE user_profiles SET attribute_points = attribute_points + ? WHERE user_id = ?`,
         [reward, userId]
       );
+
+      console.log(`🎁 [签到奖励] 用户 ${user.username} 获得 ${reward} 属性点，影响行数: ${rewardResult.affectedRows}`);
+
+      // 验证：重新查询签到记录确认更新成功
+      const [verifyResult] = await db.query(
+        'SELECT last_date, consecutive_days, total_days FROM user_checkin WHERE user_id = ?',
+        [userId]
+      );
+      
+      if (verifyResult) {
+        const formattedLastDate = this.formatDate(verifyResult.last_date);
+        console.log(`✅ [验证成功] 数据库中的签到记录: 最后签到=${formattedLastDate}, 连续=${verifyResult.consecutive_days}天, 总计=${verifyResult.total_days}天`);
+      } else {
+        console.error(`⚠️ [验证失败] 无法读取用户 ${user.username} 的签到记录`);
+      }
 
       return {
         success: true,
@@ -579,6 +699,7 @@ class DatabaseService {
         message: `签到成功！连续签到${consecutiveDays}天，获得${reward}属性点`
       };
     } catch (error) {
+      console.error('❌ [签到错误]:', error.message);
       throw error;
     }
   }

@@ -47,6 +47,7 @@ export class GameStateManager {
     if (!this.user) return;
     
     Object.assign(this.user, updates);
+    this.saveToLocalStorage(); // 保存到localStorage
     this.emit('user:updated', this.user);
   }
 

@@ -174,13 +174,13 @@ export class QuestsUI {
       if (result.success) {
         window.uiManager.showNotification('任务完成！');
         
-        // 更新用户数据
+        // 更新用户数据并保存到localStorage
         if (result.user) {
-          window.gameState.user = result.user;
+          window.gameState.setUser(result.user);
         } else {
           // 如果没有返回用户数据，则重新获取
           const profile = await window.networkManager.getProfile(user.id);
-          window.gameState.user = profile.user;
+          window.gameState.setUser(profile.user);
         }
         
         // 如果升级了，显示升级信息
@@ -278,9 +278,9 @@ export class QuestsUI {
       if (result.success) {
         window.uiManager.showNotification('成就奖励已领取');
         
-        // 更新用户数据
+        // 更新用户数据并保存到localStorage
         if (result.user) {
-          window.gameState.user = result.user;
+          window.gameState.setUser(result.user);
         }
         
         // 如果升级了，显示升级信息

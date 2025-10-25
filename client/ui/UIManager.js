@@ -461,15 +461,24 @@ export class UIManager {
 
   async addAttribute(userId, attribute) {
     try {
+      // 防止重复点击（检查是否正在处理中）
+      if (this.isAddingAttribute) {
+        console.log('⚠️ 正在加点，请稍候...');
+        return;
+      }
+      this.isAddingAttribute = true;
+      
       // 先更新UI显示（乐观更新）
       const user = window.gameState.getUser();
       if (!user) {
+        this.isAddingAttribute = false;
         return;
       }
       
       // 检查属性点是否足够
       if (user.attributePoints < 1) {
         alert('属性点不足');
+        this.isAddingAttribute = false;
         return;
       }
       
@@ -488,8 +497,8 @@ export class UIManager {
       const result = await window.networkManager.addAttribute(userId, attribute, 1);
       
       if (result.success) {
-        // 服务器确认成功，更新完整的用户数据（但不触发重新渲染）
-        window.gameState.user = result.user;
+        // 服务器确认成功，更新完整的用户数据并保存到localStorage
+        window.gameState.setUser(result.user);
         this.showNotification(`${this.getAttributeName(attribute)} +1`);
         
         // 更新战力显示
@@ -507,6 +516,9 @@ export class UIManager {
         this.updateAttributePointsDisplay(oldPoints);
         alert('加点失败');
       }
+      
+      // 解除锁定
+      this.isAddingAttribute = false;
     } catch (error) {
       // 如果出错，回滚UI
       const user = window.gameState.getUser();
@@ -515,7 +527,7 @@ export class UIManager {
         try {
           const result = await window.networkManager.getProfile(userId);
           if (result.success) {
-            window.gameState.user = result.user;
+            window.gameState.setUser(result.user);
             // 只更新显示，不重新渲染整个页面
             this.updateAttributeDisplay(attribute, result.user.attributes[attribute]);
             this.updateAttributePointsDisplay(result.user.attributePoints);
@@ -525,6 +537,9 @@ export class UIManager {
         }
       }
       alert(error.message || '加点失败');
+      
+      // 解除锁定
+      this.isAddingAttribute = false;
     }
   }
   
@@ -595,9 +610,9 @@ export class UIManager {
       if (result.success) {
         this.showNotification(result.message);
         
-        // 刷新用户数据（不触发事件）
+        // 刷新用户数据并保存到localStorage
         const profile = await window.networkManager.getProfile(userId);
-        window.gameState.user = profile.user;
+        window.gameState.setUser(profile.user);
         
         // 更新顶部用户信息栏
         this.updateUserBar();

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>清除缓存工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: white;
+        }
+        .box {
+            background: #2a2a3e;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 15px 30px;
+            background: #667eea;
+            border: none;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 10px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .success {
+            color: #00ff00;
+        }
+        .error {
+            color: #ff4444;
+        }
+        pre {
+            background: #1a1a2e;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>🧹 FightFight 缓存清理工具</h1>
+        
+        <h2>当前 localStorage 数据：</h2>
+        <div id="current-data"></div>
+        
+        <h2>操作：</h2>
+        <button onclick="showData()">📊 查看当前数据</button>
+        <button onclick="clearCache()">🗑️ 清除缓存</button>
+        <button onclick="window.location.href='/'">🏠 返回游戏</button>
+        
+        <div id="message" style="margin-top: 20px;"></div>
+    </div>
+
+    <script>
+        function showData() {
+            const data = localStorage.getItem('fightfight_game_state');
+            const messageEl = document.getElementById('message');
+            const dataEl = document.getElementById('current-data');
+            
+            if (!data) {
+                dataEl.innerHTML = '<p class="error">❌ 没有找到缓存数据</p>';
+                return;
+            }
+            
+            try {
+                const parsed = JSON.parse(data);
+                dataEl.innerHTML = `
+                    <pre>${JSON.stringify(parsed, null, 2)}</pre>
+                    <p><strong>用户名:</strong> ${parsed.user?.username || 'N/A'}</p>
+                    <p><strong>等级:</strong> ${parsed.user?.level || 'N/A'}</p>
+                    <p><strong>属性点:</strong> ${parsed.user?.attributePoints || 'N/A'}</p>
+                    <p><strong>战力:</strong> ${parsed.user?.power || 'N/A'}</p>
+                `;
+                messageEl.innerHTML = '<p class="success">✅ 数据已显示</p>';
+            } catch (e) {
+                dataEl.innerHTML = '<p class="error">❌ 数据格式错误</p>';
+                messageEl.innerHTML = '<p class="error">❌ 解析失败: ' + e.message + '</p>';
+            }
+        }
+        
+        function clearCache() {
+            const messageEl = document.getElementById('message');
+            const dataEl = document.getElementById('current-data');
+            
+            try {
+                localStorage.removeItem('fightfight_game_state');
+                messageEl.innerHTML = '<p class="success">✅ 缓存已清除！请点击"返回游戏"并重新登录。</p>';
+                dataEl.innerHTML = '<p>缓存已清空</p>';
+            } catch (e) {
+                messageEl.innerHTML = '<p class="error">❌ 清除失败: ' + e.message + '</p>';
+            }
+        }
+        
+        // 自动显示数据
+        showData();
+    </script>
+</body>
+</html>
+

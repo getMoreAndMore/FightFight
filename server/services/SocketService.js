@@ -129,14 +129,21 @@ class SocketService {
     try {
       const { toUsername } = data;
       
+      console.log(`📤 [好友请求] ${userId} 想要添加好友: ${toUsername}`);
+      
       // 根据用户名查找用户
       const toUser = await this.db.findUserByUsername(toUsername);
       if (!toUser) {
+        console.log(`⚠️ [好友请求] 用户不存在: ${toUsername}`);
         socket.emit('error', { message: '用户不存在' });
         return;
       }
       
+      console.log(`✅ [好友请求] 找到用户: ${toUser.username} (${toUser.id})`);
+      
       const result = await this.db.addFriend(userId, toUser.id);
+      
+      console.log(`✅ [好友请求] 添加成功: ${userId} -> ${toUser.id}`);
       
       socket.emit('friend:request:sent', { success: true, message: '好友请求已发送' });
       
@@ -147,9 +154,13 @@ class SocketService {
         this.io.to(toSocketId).emit('friend:request:received', {
           from: this.db.getSafeUser(fromUser)
         });
+        console.log(`📨 [好友请求] 已通知目标用户: ${toUser.username}`);
+      } else {
+        console.log(`⚠️ [好友请求] 目标用户不在线: ${toUser.username}`);
       }
     } catch (error) {
-      socket.emit('error', { message: error.message });
+      console.error('❌ [好友请求错误]:', error);
+      socket.emit('error', { message: error.message || '添加好友失败' });
     }
   }
 
