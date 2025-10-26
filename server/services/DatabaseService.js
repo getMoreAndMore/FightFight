@@ -306,6 +306,20 @@ class DatabaseService {
     if (!user) return null;
     const safe = { ...user };
     delete safe.password;
+    
+    // 🔴 关键修复：确保 userId 字段存在
+    // 有些地方可能用 id，有些用 userId，统一为 userId
+    if (safe.id && !safe.userId) {
+      safe.userId = safe.id;
+    }
+    
+    console.log('🔍 [getSafeUser] 输出:', {
+      username: safe.username,
+      userId: safe.userId,
+      id: safe.id,
+      '是否有userId': !!safe.userId
+    });
+    
     return safe;
   }
 

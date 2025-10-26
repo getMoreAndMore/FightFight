@@ -33,7 +33,12 @@ class SocketService {
       socket.on('pvp:invite', (data) => this.handlePvpInvite(socket, data));
       socket.on('pvp:accept', (data) => this.handlePvpAccept(socket, data));
       socket.on('pvp:action', (data) => this.handlePvpAction(socket, data));
-      socket.on('pvp:surrender', () => this.handlePvpSurrender(socket));
+      socket.on('pvp:surrender', (data) => this.handlePvpSurrender(socket, data));
+      
+      // 实时对战事件
+      socket.on('pvp:position', (data) => this.handlePvpPosition(socket, data));
+      socket.on('pvp:attack', (data) => this.handlePvpAttack(socket, data));
+      socket.on('pvp:defeated', (data) => this.handlePvpDefeated(socket, data));
 
       // 聊天
       socket.on('chat:message', (data) => this.handleChatMessage(socket, data));
@@ -285,19 +290,25 @@ class SocketService {
     const user1 = await this.db.findUserByIdAsync(userId1);
     const user2 = await this.db.findUserByIdAsync(userId2);
     
+    // 🔴 计算最大血量
+    const user1MaxHp = user1.attributes.endurance * 10;
+    const user2MaxHp = user2.attributes.endurance * 10;
+    
     const battle = {
       id: battleId,
       players: {
         [userId1]: {
           user: this.db.getSafeUser(user1),
-          hp: this.calculateMaxHp(user1),
-          maxHp: this.calculateMaxHp(user1),
+          currentHp: user1MaxHp,  // 🔴 当前血量
+          maxHp: user1MaxHp,      // 🔴 最大血量
+          hp: user1MaxHp,         // 兼容旧代码
           effects: []
         },
         [userId2]: {
           user: this.db.getSafeUser(user2),
-          hp: this.calculateMaxHp(user2),
-          maxHp: this.calculateMaxHp(user2),
+          currentHp: user2MaxHp,  // 🔴 当前血量
+          maxHp: user2MaxHp,      // 🔴 最大血量
+          hp: user2MaxHp,         // 兼容旧代码
           effects: []
         }
       },
@@ -312,21 +323,32 @@ class SocketService {
     const socket1 = this.userSockets.get(userId1);
     const socket2 = this.userSockets.get(userId2);
     
+    console.log('🟢 [服务器] 战斗数据创建完成', {
+      战斗ID: battleId,
+      玩家IDs: Object.keys(battle.players),
+      玩家1: userId1,
+      玩家2: userId2,
+      玩家1用户名: battle.players[userId1].user.username,
+      玩家2用户名: battle.players[userId2].user.username
+    });
+    
     if (socket1) {
+      console.log('📤 [服务器→玩家1] 发送pvp:start', {
+        目标ID: userId1,
+        用户名: user1.username
+      });
       this.io.to(socket1).emit('pvp:start', {
-        battleId,
-        opponent: this.db.getSafeUser(user2),
-        yourTurn: true,
-        battle
+        battleData: battle  // 修复：改为 battleData
       });
     }
     
     if (socket2) {
+      console.log('📤 [服务器→玩家2] 发送pvp:start', {
+        目标ID: userId2,
+        用户名: user2.username
+      });
       this.io.to(socket2).emit('pvp:start', {
-        battleId,
-        opponent: this.db.getSafeUser(user1),
-        yourTurn: false,
-        battle
+        battleData: battle  // 修复：改为 battleData
       });
     }
     
@@ -444,7 +466,8 @@ class SocketService {
   }
 
   calculateMaxHp(user) {
-    return 100 + user.attributes.endurance * 10;
+    // 生命值 = 耐力 × 10
+    return user.attributes.endurance * 10;
   }
 
   applySkillEffect(battle, userId, skillId) {
@@ -461,44 +484,47 @@ class SocketService {
     return false;
   }
 
-  async endPvpBattle(battleId) {
+  async endPvpBattle(battleId, winnerId = null, loserId = null) {
     const battle = this.activeBattles.get(battleId);
     if (!battle) return;
     
-    const winner = Object.entries(battle.players).find(
-      ([_, player]) => player.hp > 0
-    );
-    const loser = Object.entries(battle.players).find(
-      ([_, player]) => player.hp <= 0
-    );
-    
-    if (winner && loser) {
-      // 更新战绩
-      const winnerUser = await this.db.findUserByIdAsync(winner[0]);
-      const loserUser = await this.db.findUserByIdAsync(loser[0]);
+    // 如果没有指定胜利者，自动判断
+    if (!winnerId || !loserId) {
+      const winner = Object.entries(battle.players).find(
+        ([_, player]) => player.hp > 0
+      );
+      const loser = Object.entries(battle.players).find(
+        ([_, player]) => player.hp <= 0
+      );
       
-      winnerUser.pvp.wins++;
-      winnerUser.pvp.rating += 25;
-      loserUser.pvp.losses++;
-      loserUser.pvp.rating = Math.max(0, loserUser.pvp.rating - 20);
+      if (winner && loser) {
+        winnerId = winner[0];
+        loserId = loser[0];
+      }
+    }
+    
+    if (winnerId && loserId) {
+      console.log(`🏆 PVP战斗结束: 胜利者 ${winnerId}, 失败者 ${loserId}`);
       
       // 通知结果
-      const winnerSocketId = this.userSockets.get(winner[0]);
-      const loserSocketId = this.userSockets.get(loser[0]);
+      const winnerSocketId = this.userSockets.get(winnerId);
+      const loserSocketId = this.userSockets.get(loserId);
       
       if (winnerSocketId) {
         this.io.to(winnerSocketId).emit('pvp:end', {
           result: 'victory',
-          battle,
-          rewards: { exp: 100, rating: 25 }
+          winnerId: winnerId,
+          loserId: loserId,
+          battle
         });
       }
       
       if (loserSocketId) {
         this.io.to(loserSocketId).emit('pvp:end', {
           result: 'defeat',
-          battle,
-          rewards: { exp: 50, rating: -20 }
+          winnerId: winnerId,
+          loserId: loserId,
+          battle
         });
       }
     }
@@ -516,17 +542,134 @@ class SocketService {
     }
   }
 
-  handlePvpSurrender(socket) {
+  handlePvpSurrender(socket, data) {
     const userId = this.onlineUsers.get(socket.id);
     if (!userId) return;
 
-    for (const [battleId, battle] of this.activeBattles.entries()) {
-      if (battle.players[userId]) {
-        battle.players[userId].hp = 0;
-        this.endPvpBattle(battleId);
-        break;
-      }
+    const { battleId } = data;
+    const battle = this.activeBattles.get(battleId);
+    if (!battle) return;
+
+    // 找到对手
+    const opponentId = Object.keys(battle.players).find(id => id !== userId);
+    
+    // 结束战斗
+    this.endPvpBattle(battleId, opponentId, userId);
+  }
+  
+  // 处理位置同步
+  handlePvpPosition(socket, data) {
+    const userId = this.onlineUsers.get(socket.id);
+    if (!userId) {
+      console.log('❌ [位置同步] 无法获取用户ID');
+      return;
     }
+
+    const { battleId } = data;
+    const battle = this.activeBattles.get(battleId);
+    if (!battle) {
+      console.log('❌ [位置同步] 找不到战斗:', battleId);
+      return;
+    }
+
+    // 转发给对手
+    const opponentId = Object.keys(battle.players).find(id => id !== userId);
+    const opponentSocketId = this.userSockets.get(opponentId);
+    
+    console.log('📍 [服务器转发位置]', {
+      发送者: userId,
+      接收者: opponentId,
+      位置: { x: data.x, y: data.y },
+      原始data中的userId: data.userId,
+      对手Socket: opponentSocketId ? '已连接' : '未连接'
+    });
+    
+    if (opponentSocketId) {
+      // 🔴 关键修复：确保转发的数据包含正确的 userId
+      const forwardData = {
+        ...data,
+        userId: userId  // 强制设置为发送者的ID
+      };
+      
+      console.log('📤 [服务器] 转发数据:', forwardData);
+      this.io.to(opponentSocketId).emit('pvp:position', forwardData);
+    } else {
+      console.log('❌ [位置同步] 对手未连接');
+    }
+  }
+  
+  // 处理攻击
+  handlePvpAttack(socket, data) {
+    const userId = this.onlineUsers.get(socket.id);
+    if (!userId) {
+      console.log('❌ [攻击处理] 无法获取用户ID');
+      return;
+    }
+
+    const { battleId, attackerId, targetId, damage, knockbackDirection } = data;
+    const battle = this.activeBattles.get(battleId);
+    if (!battle) {
+      console.log('❌ [攻击处理] 找不到战斗:', battleId);
+      return;
+    }
+
+    console.log(`⚔️ [PVP攻击] ${attackerId} 攻击 ${targetId}, 伤害: ${damage}, 击退方向: ${knockbackDirection}`);
+
+    // 扣除对手血量
+    const targetPlayer = battle.players[targetId];
+    if (targetPlayer) {
+      const oldHp = targetPlayer.hp;
+      targetPlayer.hp = Math.max(0, targetPlayer.hp - damage);
+      
+      const attackerSocketId = this.userSockets.get(attackerId);
+      const targetSocketId = this.userSockets.get(targetId);
+      
+      console.log(`🩸 [血量变化] ${targetId}: ${oldHp} -> ${targetPlayer.hp} (最大: ${targetPlayer.maxHp})`);
+      console.log(`📡 [Socket状态] 攻击者: ${attackerSocketId ? '在线' : '离线'}, 目标: ${targetSocketId ? '在线' : '离线'}`);
+      
+      // 🔴 通知被攻击者受到伤害（包含击退方向）
+      if (targetSocketId) {
+        console.log(`➡️ [发送pvp:damage] 目标: ${targetId}, 伤害: ${damage}, 击退方向: ${knockbackDirection}`);
+        this.io.to(targetSocketId).emit('pvp:damage', {
+          damage: damage,
+          targetId: targetId,
+          knockbackDirection: knockbackDirection  // 🔴 添加击退方向
+        });
+        
+        // 通知对手有人攻击了
+        console.log(`➡️ [发送pvp:attack] 攻击者: ${attackerId} -> 目标: ${targetId}`);
+        this.io.to(targetSocketId).emit('pvp:attack', {
+          userId: attackerId,
+          damage: damage,
+          hit: true
+        });
+      }
+      
+      // 🔴 通知攻击者对手的血量更新（用于实时显示对手血条，包含击退方向）
+      if (attackerSocketId) {
+        console.log(`➡️ [发送pvp:hp:update] 攻击者: ${attackerId}, 对手血量: ${targetPlayer.hp}/${targetPlayer.maxHp}, 击退方向: ${knockbackDirection}`);
+        this.io.to(attackerSocketId).emit('pvp:hp:update', {
+          targetId: targetId,  // 🔴 修复：应该是 targetId 而不是 userId
+          currentHp: targetPlayer.hp,
+          maxHp: targetPlayer.maxHp,
+          knockbackDirection: knockbackDirection  // 🔴 添加击退方向
+        });
+      }
+
+      // 检查是否死亡
+      if (targetPlayer.hp <= 0) {
+        console.log(`💀 [玩家死亡] ${targetId} 被 ${attackerId} 击败`);
+        this.endPvpBattle(battleId, attackerId, targetId);
+      }
+    } else {
+      console.log('❌ [攻击处理] 找不到目标玩家:', targetId);
+    }
+  }
+  
+  // 处理玩家死亡
+  handlePvpDefeated(socket, data) {
+    const { battleId, winnerId, loserId } = data;
+    this.endPvpBattle(battleId, winnerId, loserId);
   }
 
   checkTurnTimeout(battleId) {

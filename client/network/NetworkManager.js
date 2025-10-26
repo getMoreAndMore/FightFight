@@ -264,6 +264,7 @@ export class NetworkManager {
     });
 
     this.socket.on('pvp:start', (data) => {
+      console.log('📥 [NetworkManager] 收到对战开始事件:', data);
       this.emit('pvp:start', data);
     });
 
@@ -278,7 +279,24 @@ export class NetworkManager {
     this.socket.on('pvp:invite:received', (data) => {
       this.emit('pvp:invite:received', data);
     });
-
+    
+    // 实时对战事件
+    this.socket.on('pvp:position', (data) => {
+      this.emit('pvp:position', data);
+    });
+    
+    this.socket.on('pvp:attack', (data) => {
+      this.emit('pvp:attack', data);
+    });
+    
+    this.socket.on('pvp:damage', (data) => {
+      this.emit('pvp:damage', data);
+    });
+    
+    this.socket.on('pvp:hp:update', (data) => {
+      this.emit('pvp:hp:update', data);
+    });
+ 
     this.socket.on('pvp:match:timeout', (data) => {
       this.emit('pvp:match:timeout', data);
     });

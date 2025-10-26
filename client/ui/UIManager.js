@@ -52,6 +52,12 @@ export class UIManager {
       this.showPvpInvite(data);
     });
     
+    // 监听对战开始
+    window.networkManager.on('pvp:start', (data) => {
+      console.log('🎮 对战开始！', data);
+      this.startRealtimePvp(data);
+    });
+    
     // 监听好友请求
     window.networkManager.on('friend:request:received', (data) => {
       console.log('收到好友请求:', data);
@@ -61,6 +67,32 @@ export class UIManager {
         this.showFriends();
       }
     });
+  }
+  
+  // 开始实时 PVP 对战
+  startRealtimePvp(data) {
+    console.log('📺 [UIManager] 启动实时对战场景');
+    console.log('📺 [UIManager] 收到的数据:', data);
+    console.log('📺 [UIManager] battleData:', data.battleData);
+    
+    if (!data.battleData) {
+      console.error('❌ [UIManager] 缺少 battleData！', data);
+      this.showNotification('对战数据错误，请重试', 'error');
+      return;
+    }
+    
+    // 暂停当前游戏场景
+    const gameScene = window.game.scene.getScene('GameScene');
+    if (gameScene && gameScene.scene.isActive()) {
+      console.log('📺 [UIManager] 暂停 GameScene');
+      gameScene.scene.pause();
+    }
+    
+    // 启动实时对战场景
+    console.log('📺 [UIManager] 启动 RealtimePvpScene，传递数据:', data);
+    window.game.scene.start('RealtimePvpScene', data);
+    
+    this.showNotification('🎮 实时对战开始！');
   }
 
   // 显示登录界面
@@ -786,17 +818,15 @@ export class UIManager {
 
     window.networkManager.matchPvp();
 
-    // 监听匹配结果
-    window.networkManager.on('pvp:start', (data) => {
-      statusEl.textContent = '找到对手！';
-      statusEl.style.color = '#00ff00';
-
-      // 启动战斗场景
-      setTimeout(() => {
-        window.game.scene.stop('GameScene');
-        window.game.scene.start('BattleScene', data);
-      }, 1000);
-    });
+    // 【已注释】旧的回合制PVP监听器，现在使用 setupNetworkListeners() 中的实时PVP
+    // window.networkManager.on('pvp:start', (data) => {
+    //   statusEl.textContent = '找到对手！';
+    //   statusEl.style.color = '#00ff00';
+    //   setTimeout(() => {
+    //     window.game.scene.stop('GameScene');
+    //     window.game.scene.start('BattleScene', data);
+    //   }, 1000);
+    // });
 
     window.networkManager.on('pvp:match:timeout', () => {
       statusEl.textContent = '匹配超时，请重试';

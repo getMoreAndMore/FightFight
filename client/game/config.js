@@ -4,6 +4,7 @@ import { MainMenuScene } from './scenes/MainMenuScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { BattleScene } from './scenes/BattleScene.js';
 import { MinigameScene } from './scenes/MinigameScene.js';
+import { RealtimePvpScene } from './scenes/RealtimePvpScene.js';
 
 export const GameConfig = {
   type: Phaser.AUTO,
@@ -23,7 +24,8 @@ export const GameConfig = {
     MainMenuScene,
     GameScene,
     BattleScene,
-    MinigameScene
+    MinigameScene,
+    RealtimePvpScene
   ],
   scale: {
     mode: Phaser.Scale.RESIZE,
