@@ -14,6 +14,9 @@ const rankingRoutes = require('./routes/rankingRoutes');
 const achievementRoutes = require('./routes/achievementRoutes');
 const questRoutes = require('./routes/questRoutes');
 
+// 🧪 测试路由（生产环境请删除）
+const testRoutes = require('./routes/testRoutes');
+
 // 导入服务
 const SocketService = require('./services/SocketService');
 const DatabaseService = require('./services/DatabaseService');
@@ -69,6 +72,9 @@ async function startServer() {
     app.use('/api/ranking', rankingRoutes);
     app.use('/api/achievement', achievementRoutes);
     app.use('/api/quest', questRoutes);
+    
+    // 🧪 测试路由（生产环境请删除此行）
+    app.use('/api/test', testRoutes);
 
     // 健康检查
     app.get('/api/health', (req, res) => {

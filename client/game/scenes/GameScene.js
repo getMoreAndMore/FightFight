@@ -36,6 +36,14 @@ export class GameScene extends Phaser.Scene {
     // 键盘输入
     this.cursors = this.input.keyboard.createCursorKeys();
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    
+    // 添加 WASD 键支持
+    this.keys = {
+      W: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+      A: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+      S: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      D: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D)
+    };
   }
 
   loadSceneBackground() {
@@ -187,17 +195,17 @@ export class GameScene extends Phaser.Scene {
   update() {
     if (!this.player || !this.cursors) return;
 
-    // 左右移动
-    if (this.cursors.left.isDown) {
+    // 左右移动（支持方向键和 AD）
+    if (this.cursors.left.isDown || this.keys.A.isDown) {
       this.player.body.setVelocityX(-200);
-    } else if (this.cursors.right.isDown) {
+    } else if (this.cursors.right.isDown || this.keys.D.isDown) {
       this.player.body.setVelocityX(200);
     } else {
       this.player.body.setVelocityX(0);
     }
 
-    // 跳跃
-    if (this.cursors.up.isDown && this.player.body.touching.down) {
+    // 跳跃（支持方向键上和 W）
+    if ((this.cursors.up.isDown || this.keys.W.isDown) && this.player.body.touching.down) {
       this.player.body.setVelocityY(-400);
     }
 

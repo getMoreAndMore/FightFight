@@ -477,7 +477,8 @@ class DatabaseService {
         user.inventory.slots += slotsGained;
         totalSlots += slotsGained;
 
-        const attributeBonus = 0.02;
+        // 升级时属性按当前值的20%提升
+        const attributeBonus = 0.20;
         const strengthGain = Math.max(1, Math.ceil(user.attributes.strength * attributeBonus));
         const agilityGain = Math.max(1, Math.ceil(user.attributes.agility * attributeBonus));
         const intelligenceGain = Math.max(1, Math.ceil(user.attributes.intelligence * attributeBonus));
@@ -595,7 +596,7 @@ class DatabaseService {
 
       for (let i = 0; i < users.length; i++) {
         await db.query(
-          'INSERT INTO rankings (user_id, username, level, power, rank) VALUES (?, ?, ?, ?, ?)',
+          'INSERT INTO rankings (user_id, username, level, power, `rank`) VALUES (?, ?, ?, ?, ?)',
           [users[i].id, users[i].username, users[i].level, users[i].power, i + 1]
         );
       }
@@ -606,9 +607,10 @@ class DatabaseService {
 
   async getGlobalRankings(limit = 100) {
     try {
+      // LIMIT 直接拼接，因为是服务器端控制的数值，无 SQL 注入风险
+      const limitValue = parseInt(limit) || 100;
       return await db.query(
-        'SELECT * FROM rankings ORDER BY rank ASC LIMIT ?',
-        [limit]
+        `SELECT * FROM rankings ORDER BY \`rank\` ASC LIMIT ${limitValue}`
       );
     } catch (error) {
       console.error('获取全局排行榜失败:', error.message);

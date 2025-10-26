@@ -43,6 +43,25 @@ export class UIManager {
       }
     });
   }
+  
+  // 设置网络事件监听（在登录后调用）
+  setupNetworkListeners() {
+    // 监听 PVP 对战邀请
+    window.networkManager.on('pvp:invite:received', (data) => {
+      console.log('收到对战邀请:', data);
+      this.showPvpInvite(data);
+    });
+    
+    // 监听好友请求
+    window.networkManager.on('friend:request:received', (data) => {
+      console.log('收到好友请求:', data);
+      this.showNotification(`${data.from.username} 请求添加你为好友`);
+      // 刷新好友列表
+      if (this.currentView === 'friends') {
+        this.showFriends();
+      }
+    });
+  }
 
   // 显示登录界面
   showLoginScreen() {
@@ -150,6 +169,9 @@ export class UIManager {
           window.networkManager.socketLogin(result.user.id, result.sessionId);
         });
         
+        // 设置网络事件监听
+        this.setupNetworkListeners();
+        
         this.showMessage('登录成功！', 'success');
         
         setTimeout(() => {
@@ -240,6 +262,8 @@ export class UIManager {
             <button class="nav-btn" data-view="ranking" style="padding: 10px; background: #333; border: none; color: white; cursor: pointer; border-radius: 5px;">排行</button>
             <button class="nav-btn" data-view="quests" style="padding: 10px; background: #333; border: none; color: white; cursor: pointer; border-radius: 5px;">任务</button>
             <button class="nav-btn" data-view="pvp" style="padding: 10px; background: #333; border: none; color: white; cursor: pointer; border-radius: 5px;">PVP</button>
+            <!-- 🧪 测试菜单按钮（生产环境请删除） -->
+            <button class="nav-btn" data-view="test" style="padding: 10px; background: #ff4444; border: none; color: white; cursor: pointer; border-radius: 5px; font-weight: bold;">🧪 测试</button>
             <button class="nav-btn" data-view="settings" style="padding: 10px; background: #333; border: none; color: white; cursor: pointer; border-radius: 5px;">设置</button>
           </div>
         </div>
@@ -366,9 +390,28 @@ export class UIManager {
       case 'pvp':
         this.showPVP();
         break;
+      case 'test':
+        // 🧪 测试菜单（生产环境请删除）
+        this.showTestMenu();
+        break;
       case 'settings':
         this.showSettings();
         break;
+    }
+  }
+  
+  // 🧪 显示测试菜单（生产环境请删除此方法）
+  async showTestMenu() {
+    const content = document.getElementById('content-area');
+    if (!content) return;
+    
+    // 动态导入测试菜单组件
+    try {
+      const { TestMenu } = await import('./components/TestMenu.js');
+      TestMenu.render(content);
+    } catch (error) {
+      console.error('加载测试菜单失败:', error);
+      content.innerHTML = '<div style="color: #ff4444; padding: 20px;">测试菜单加载失败</div>';
     }
   }
 
@@ -823,6 +866,194 @@ export class UIManager {
     alert(message);
   }
 
+  // 显示 PVP 对战邀请
+  showPvpInvite(data) {
+    const { from, inviteId } = data;
+    
+    // 创建邀请弹窗
+    const inviteModal = document.createElement('div');
+    inviteModal.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      z-index: 10000;
+      min-width: 350px;
+      text-align: center;
+      animation: slideIn 0.3s ease-out;
+    `;
+    
+    inviteModal.innerHTML = `
+      <style>
+        @keyframes slideIn {
+          from {
+            transform: translate(-50%, -60%);
+            opacity: 0;
+          }
+          to {
+            transform: translate(-50%, -50%);
+            opacity: 1;
+          }
+        }
+        .pvp-invite-title {
+          font-size: 24px;
+          font-weight: bold;
+          color: #fff;
+          margin-bottom: 20px;
+          text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .pvp-invite-info {
+          background: rgba(255,255,255,0.1);
+          padding: 15px;
+          border-radius: 10px;
+          margin-bottom: 20px;
+        }
+        .pvp-invite-player {
+          font-size: 20px;
+          font-weight: bold;
+          color: #ffd700;
+          margin-bottom: 10px;
+        }
+        .pvp-invite-stats {
+          font-size: 14px;
+          color: #fff;
+          opacity: 0.9;
+        }
+        .pvp-invite-buttons {
+          display: flex;
+          gap: 15px;
+          justify-content: center;
+        }
+        .pvp-invite-btn {
+          padding: 12px 30px;
+          font-size: 16px;
+          font-weight: bold;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.3s;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .pvp-invite-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+        .pvp-invite-btn:active {
+          transform: translateY(0);
+        }
+        .pvp-accept-btn {
+          background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%);
+          color: #000;
+        }
+        .pvp-decline-btn {
+          background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
+          color: #fff;
+        }
+      </style>
+      
+      <div class="pvp-invite-title">⚔️ 对战邀请</div>
+      
+      <div class="pvp-invite-info">
+        <div class="pvp-invite-player">${from.username}</div>
+        <div class="pvp-invite-stats">
+          等级 ${from.level} | 战力 ${from.power}
+        </div>
+      </div>
+      
+      <div style="color: #fff; margin-bottom: 20px; font-size: 14px;">
+        邀请你进行一场 PVP 对战！
+      </div>
+      
+      <div class="pvp-invite-buttons">
+        <button class="pvp-invite-btn pvp-accept-btn" id="accept-pvp-btn">
+          ✓ 接受挑战
+        </button>
+        <button class="pvp-invite-btn pvp-decline-btn" id="decline-pvp-btn">
+          ✗ 拒绝
+        </button>
+      </div>
+    `;
+    
+    // 创建背景遮罩
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 9999;
+      animation: fadeIn 0.3s ease-out;
+    `;
+    
+    document.body.appendChild(overlay);
+    document.body.appendChild(inviteModal);
+    
+    // 播放提示音（可选）
+    this.playNotificationSound();
+    
+    // 接受按钮
+    document.getElementById('accept-pvp-btn').addEventListener('click', () => {
+      window.networkManager.acceptPvpInvite(inviteId);
+      this.showNotification('已接受对战邀请！');
+      document.body.removeChild(inviteModal);
+      document.body.removeChild(overlay);
+    });
+    
+    // 拒绝按钮
+    document.getElementById('decline-pvp-btn').addEventListener('click', () => {
+      this.showNotification('已拒绝对战邀请');
+      document.body.removeChild(inviteModal);
+      document.body.removeChild(overlay);
+    });
+    
+    // 点击遮罩关闭
+    overlay.addEventListener('click', () => {
+      this.showNotification('已拒绝对战邀请');
+      document.body.removeChild(inviteModal);
+      document.body.removeChild(overlay);
+    });
+    
+    // 30秒后自动关闭
+    setTimeout(() => {
+      if (document.body.contains(inviteModal)) {
+        this.showNotification('对战邀请已过期');
+        document.body.removeChild(inviteModal);
+        document.body.removeChild(overlay);
+      }
+    }, 30000);
+  }
+  
+  // 播放通知音效（可选）
+  playNotificationSound() {
+    try {
+      const audio = new Audio();
+      // 使用 Web Audio API 生成简单的提示音
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+    } catch (error) {
+      console.log('无法播放提示音:', error);
+    }
+  }
+  
   // 显示奖励
   // 显示升级通知
   showLevelUpNotification(levelUpInfo) {

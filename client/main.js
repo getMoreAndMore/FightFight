@@ -75,6 +75,9 @@ async function tryRestoreLogin() {
           window.networkManager.socketLogin(user.id, sessionId);
         });
         
+        // 设置网络事件监听（接收 PVP 邀请等）
+        window.uiManager.setupNetworkListeners();
+        
         // 显示主界面
         window.uiManager.showMainUI();
         

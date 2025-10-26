@@ -11,6 +11,7 @@
     "start": "node server/index.js",
     "db:setup": "node scripts/setup-database.js",
     "db:test": "node scripts/test-database.js",
+    "db:rankings": "node scripts/create-rankings-table.js",
     "server": "node server/index.js",
     "check": "node server/check-setup.js",
     "diagnose": "node scripts/diagnose.js",
