@@ -38,6 +38,8 @@ class SocketService {
       // 实时对战事件
       socket.on('pvp:position', (data) => this.handlePvpPosition(socket, data));
       socket.on('pvp:attack', (data) => this.handlePvpAttack(socket, data));
+      socket.on('pvp:ranged-attack', (data) => this.handlePvpRangedAttack(socket, data));  // 🎯 远程攻击
+      socket.on('pvp:ranged-hit', (data) => this.handlePvpRangedHit(socket, data));  // 🎯 远程命中
       socket.on('pvp:defeated', (data) => this.handlePvpDefeated(socket, data));
 
       // 聊天
@@ -666,6 +668,132 @@ class SocketService {
     }
   }
   
+  // 🎯 处理远程攻击（转发子弹给对手）
+  handlePvpRangedAttack(socket, data) {
+    const userId = this.onlineUsers.get(socket.id);
+    console.log('📨 [服务器收到远程攻击]', {
+      socketId: socket.id,
+      userId: userId,
+      data: data
+    });
+    
+    if (!userId) {
+      console.log('❌ [远程攻击] 无法获取用户ID');
+      return;
+    }
+
+    const { battleId, x, y, direction, damage } = data;
+    const battle = this.activeBattles.get(battleId);
+    if (!battle) {
+      console.log('❌ [远程攻击] 找不到战斗:', battleId);
+      console.log('当前活跃战斗:', Array.from(this.activeBattles.keys()));
+      return;
+    }
+
+    // 🔴 找到对手（battle.players 是一个对象，键是 userId）
+    const playerIds = Object.keys(battle.players);
+    const opponentId = playerIds.find(id => id !== userId);
+    
+    console.log('🔍 [查找对手]', {
+      所有玩家: playerIds,
+      发起者: userId,
+      对手: opponentId
+    });
+    
+    if (!opponentId) {
+      console.log('❌ [远程攻击] 找不到对手ID');
+      return;
+    }
+    
+    const opponentSocketId = this.userSockets.get(opponentId);
+    
+    console.log('🔌 [Socket映射]', {
+      对手ID: opponentId,
+      对手SocketId: opponentSocketId,
+      所有用户Socket: Array.from(this.userSockets.entries())
+    });
+    
+    if (opponentSocketId) {
+      // 转发远程攻击事件给对手（让对手也能看到子弹）
+      const forwardData = {
+        userId: userId,
+        x: x,
+        y: y,
+        direction: direction,
+        damage: damage
+      };
+      
+      this.io.to(opponentSocketId).emit('pvp:ranged-attack', forwardData);
+      
+      console.log(`✅ [远程攻击转发成功] ${userId} -> ${opponentId}`, {
+        目标Socket: opponentSocketId,
+        转发数据: forwardData
+      });
+    } else {
+      console.log('❌ [远程攻击] 找不到对手Socket:', opponentId);
+    }
+  }
+
+  // 🎯 处理远程命中（扣血和通知）
+  handlePvpRangedHit(socket, data) {
+    const userId = this.onlineUsers.get(socket.id);
+    if (!userId) {
+      console.log('❌ [远程命中] 无法获取用户ID');
+      return;
+    }
+
+    const { battleId, targetId, damage } = data;
+    const battle = this.activeBattles.get(battleId);
+    if (!battle) {
+      console.log('❌ [远程命中] 找不到战斗:', battleId);
+      return;
+    }
+
+    // 🔴 找到目标玩家（battle.players[targetId]）
+    const targetPlayer = battle.players[targetId];
+    
+    if (!targetPlayer) {
+      console.log('❌ [远程命中] 找不到目标玩家:', targetId);
+      return;
+    }
+    
+    // 扣血
+    const oldHp = targetPlayer.hp;
+    targetPlayer.hp = Math.max(0, targetPlayer.hp - damage);
+    targetPlayer.currentHp = targetPlayer.hp;  // 同步 currentHp
+    
+    console.log(`🎯 [远程命中] 攻击者: ${userId}, 目标: ${targetId}, 伤害: ${damage}, 血量: ${oldHp} -> ${targetPlayer.hp}/${targetPlayer.maxHp}`);
+
+    // 通知目标玩家受到伤害（不击退）
+    const targetSocketId = this.userSockets.get(targetId);
+    if (targetSocketId) {
+      this.io.to(targetSocketId).emit('pvp:damage', {
+        targetId: targetId,
+        damage: damage,
+        knockbackDirection: 0  // 🔴 远程攻击不击退
+      });
+      console.log(`📤 [发送伤害] -> 目标: ${targetId}`);
+    }
+
+    // 通知攻击者对手血量更新
+    const attackerSocketId = this.userSockets.get(userId);
+    if (attackerSocketId) {
+      this.io.to(attackerSocketId).emit('pvp:hp:update', {
+        targetId: targetId,
+        currentHp: targetPlayer.hp,
+        maxHp: targetPlayer.maxHp,
+        knockbackDirection: 0  // 🔴 远程攻击不击退
+      });
+      console.log(`📤 [发送血量更新] -> 攻击者: ${userId}, 对手血量: ${targetPlayer.hp}/${targetPlayer.maxHp}`);
+    }
+
+    // 检查是否击败
+    if (targetPlayer.hp <= 0) {
+      console.log(`💀 [击败] ${targetId} 被 ${userId} 击败`);
+      this.endPvpBattle(battleId, userId, targetId);
+    }
+  }
+
   // 处理玩家死亡
   handlePvpDefeated(socket, data) {
     const { battleId, winnerId, loserId } = data;

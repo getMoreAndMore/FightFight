@@ -296,6 +296,12 @@ export class NetworkManager {
     this.socket.on('pvp:hp:update', (data) => {
       this.emit('pvp:hp:update', data);
     });
+    
+    // 🎯 远程攻击事件
+    this.socket.on('pvp:ranged-attack', (data) => {
+      console.log('📥 [NetworkManager] 收到远程攻击事件:', data);
+      this.emit('pvp:ranged-attack', data);
+    });
  
     this.socket.on('pvp:match:timeout', (data) => {
       this.emit('pvp:match:timeout', data);

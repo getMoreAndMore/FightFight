@@ -75,6 +75,9 @@ export class RealtimePvpScene extends Phaser.Scene {
     // 创建战场地面（物理碰撞）
     this.createGround(WORLD_WIDTH, WORLD_HEIGHT);
 
+    // 🏗️ 创建障碍物
+    this.createObstacles(WORLD_WIDTH, WORLD_HEIGHT);
+
     // 创建标题
     this.createTitle();
 
@@ -201,6 +204,38 @@ export class RealtimePvpScene extends Phaser.Scene {
     });
   }
 
+  createObstacles(worldWidth, worldHeight) {
+    // 🏗️ 创建障碍物组（用于碰撞检测）
+    this.obstacles = this.physics.add.staticGroup();
+    
+    const grassTopY = worldHeight * 0.6;
+    
+    // 障碍物配置：[x位置百分比, 高度, 宽度]
+    const obstacleConfigs = [
+      [0.3, 80, 100],   // 左侧平台
+      [0.5, 120, 80],   // 中央高台
+      [0.7, 80, 100],   // 右侧平台
+    ];
+    
+    obstacleConfigs.forEach(([xPercent, height, width]) => {
+      const x = worldWidth * xPercent;
+      const y = grassTopY - height / 2;
+      
+      // 创建障碍物
+      const obstacle = this.add.rectangle(x, y, width, height, 0x8b4513);
+      obstacle.setStrokeStyle(4, 0x654321);
+      this.physics.add.existing(obstacle, true);  // static body
+      
+      // 添加到障碍物组
+      this.obstacles.add(obstacle);
+    });
+    
+    console.log('🏗️ [障碍物创建]', {
+      数量: obstacleConfigs.length,
+      位置: obstacleConfigs.map(c => `${c[0] * 100}%`)
+    });
+  }
+
   createTitle() {
     const width = this.cameras.main.width;
 
@@ -254,20 +289,36 @@ export class RealtimePvpScene extends Phaser.Scene {
     const playerHeight = 60;
     const playerY = grassTopY - playerHeight / 2;  // 角色中心应该让角色底部刚好在草地顶部
     
-    const leftX = worldWidth * 0.25;    // 左侧位置（世界坐标的25%）
-    const rightX = worldWidth * 0.75;   // 右侧位置（世界坐标的75%）
+    // 🎲 随机站位：使用 battleId 作为随机种子，确保两个客户端一致
+    const seed = this.battleId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const isMyPlayerOnLeft = seed % 2 === (this.myUserId < this.opponentUserId ? 0 : 1);
     
-    console.log('📍 [位置计算]', {
+    // 左右两侧的可能位置（增加随机性，避免重叠）
+    const leftPositions = [worldWidth * 0.15, worldWidth * 0.25, worldWidth * 0.35];
+    const rightPositions = [worldWidth * 0.65, worldWidth * 0.75, worldWidth * 0.85];
+    
+    const leftIndex = seed % leftPositions.length;
+    const rightIndex = (seed + 1) % rightPositions.length;
+    
+    const leftX = leftPositions[leftIndex];
+    const rightX = rightPositions[rightIndex];
+    
+    // 根据随机结果决定我的位置
+    const myX = isMyPlayerOnLeft ? leftX : rightX;
+    const opponentX = isMyPlayerOnLeft ? rightX : leftX;
+    
+    console.log('📍 [位置计算-随机站位]', {
       世界大小: `${worldWidth}x${worldHeight}`,
       草地顶部Y: grassTopY,
       角色中心Y: playerY,
-      角色底部Y: playerY + playerHeight / 2,
-      左侧X: leftX,
-      右侧X: rightX
+      我在左侧: isMyPlayerOnLeft,
+      我的X: myX,
+      对手X: opponentX,
+      随机种子: seed
     });
     
     this.myPlayer = this.add.rectangle(
-      leftX,  // 使用世界坐标
+      myX,  // 🎲 使用随机计算的位置
       playerY,  // 🔴 修正后的Y坐标
       40,
       playerHeight,
@@ -320,9 +371,9 @@ export class RealtimePvpScene extends Phaser.Scene {
       '匹配': opponentData.user.userId === this.opponentUserId
     });
     
-    // 🔴 对手在右边，使用世界坐标
+    // 🔴 对手位置（根据随机结果）
     this.opponentPlayer = this.add.rectangle(
-      rightX,  // 使用世界坐标
+      opponentX,  // 🎲 使用随机计算的位置
       playerY,  // 🔴 使用相同的Y坐标
       40,
       playerHeight,
@@ -368,6 +419,10 @@ export class RealtimePvpScene extends Phaser.Scene {
     this.physics.add.collider(this.myPlayer, this.ground);
     this.physics.add.collider(this.opponentPlayer, this.ground);
     
+    // 🏗️ 添加与障碍物的碰撞
+    this.physics.add.collider(this.myPlayer, this.obstacles);
+    this.physics.add.collider(this.opponentPlayer, this.obstacles);
+    
     // 🔴 修复地图错乱：相机跟随我的角色
     this.cameras.main.startFollow(this.myPlayer, true, 0.1, 0.1);
     console.log('📹 [相机设置] 相机跟随玩家', {
@@ -377,8 +432,19 @@ export class RealtimePvpScene extends Phaser.Scene {
 
     // 攻击状态
     this.canAttack = true;
-    this.attackCooldown = 500; // 攻击冷却时间
+    this.attackCooldown = 500; // 近战攻击冷却时间
     this.myFacingRight = true;
+    
+    // 🎯 远程攻击状态
+    this.canRangedAttack = true;
+    this.rangedAttackCooldown = 1000; // 基础远程攻击冷却时间
+    
+    // 🔫 创建子弹组
+    this.bullets = this.physics.add.group();
+    
+    console.log('🔫 [子弹组创建]', {
+      已创建: !!this.bullets
+    });
   }
 
   createHealthBars() {
@@ -427,7 +493,7 @@ export class RealtimePvpScene extends Phaser.Scene {
     const controlText = this.add.text(
       20,
       height - 60,
-      '控制: WASD移动 | ↑/W跳跃 | J/1攻击 | ESC退出',
+      '控制: WASD移动 | ↑/W跳跃 | J/1近战 | K远程 | ESC退出',
       {
         fontSize: '16px',
         fill: '#ffffff',
@@ -449,6 +515,7 @@ export class RealtimePvpScene extends Phaser.Scene {
       S: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       D: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
       J: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.J),
+      K: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K),  // 🎯 远程攻击
       ONE: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
       ESC: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
     };
@@ -461,6 +528,7 @@ export class RealtimePvpScene extends Phaser.Scene {
     window.networkManager.off('pvp:attack');
     window.networkManager.off('pvp:damage');
     window.networkManager.off('pvp:hp:update');
+    window.networkManager.off('pvp:ranged-attack');  // 🎯 远程攻击
     window.networkManager.off('pvp:end');
     
     console.log('📡 [注册] 注册新的PVP事件监听器');
@@ -552,6 +620,27 @@ export class RealtimePvpScene extends Phaser.Scene {
       }
     });
 
+    // 🎯 监听对手的远程攻击
+    window.networkManager.on('pvp:ranged-attack', (data) => {
+      console.log('📨 [收到远程攻击事件] <<<< 客户端收到', {
+        发送者: data.userId,
+        我的对手: this.opponentUserId,
+        是否匹配: data.userId === this.opponentUserId,
+        完整数据: data,
+        我的ID: this.myUserId
+      });
+      
+      if (data.userId === this.opponentUserId) {
+        console.log('✅ [匹配成功] 开始创建对手子弹');
+        this.createOpponentBullet(data);
+      } else {
+        console.log('⚠️ [远程攻击] 发送者不是我的对手，忽略', {
+          发送者: data.userId,
+          期望对手: this.opponentUserId
+        });
+      }
+    });
+
     // 监听战斗结束
     window.networkManager.on('pvp:end', (data) => {
       this.endBattle(data);
@@ -633,16 +722,24 @@ export class RealtimePvpScene extends Phaser.Scene {
       });
     }
 
-    // 攻击
+    // 近战攻击（J/1键）
     if ((Phaser.Input.Keyboard.JustDown(this.keys.J) || 
          Phaser.Input.Keyboard.JustDown(this.keys.ONE)) && this.canAttack) {
       this.performAttack();
+    }
+
+    // 🎯 远程攻击（K键）
+    if (Phaser.Input.Keyboard.JustDown(this.keys.K) && this.canRangedAttack) {
+      this.performRangedAttack();
     }
 
     // 退出
     if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
       this.confirmExit();
     }
+
+    // 更新子弹
+    this.updateBullets();
 
     // 更新名字位置
     this.myPlayerName.setPosition(this.myPlayer.x, this.myPlayer.y - 50);
@@ -703,6 +800,217 @@ export class RealtimePvpScene extends Phaser.Scene {
     // 攻击冷却
     this.time.delayedCall(this.attackCooldown, () => {
       this.canAttack = true;
+    });
+  }
+
+  performRangedAttack() {
+    if (!this.canRangedAttack || this.battleEnded) return;
+
+    // 🎯 计算冷却时间（敏捷影响攻速）
+    // 基础冷却 1000ms，敏捷每点减少 20ms，最低 400ms
+    const agility = this.myPlayer.userData.attributes.agility || 10;
+    const cooldown = Math.max(400, 1000 - (agility * 20));
+    
+    this.canRangedAttack = false;
+    
+    // 🔫 创建我的子弹
+    const bulletSpeed = 600;
+    const direction = this.myFacingRight ? 1 : -1;
+    const bulletX = this.myPlayer.x + (direction * 30);
+    const bulletY = this.myPlayer.y;
+    
+    // 🔴 创建圆形子弹
+    const bullet = this.add.circle(bulletX, bulletY, 10, 0xffff00);
+    bullet.setStrokeStyle(2, 0xffaa00);
+    
+    // 🔴 添加物理属性并加入到 bullets 组
+    this.physics.add.existing(bullet);
+    this.bullets.add(bullet);
+    
+    // 🔴 关键：确保子弹不受重力影响
+    bullet.body.setAllowGravity(false);
+    bullet.body.setVelocityX(bulletSpeed * direction);
+    bullet.body.setVelocityY(0);
+    bullet.body.setSize(20, 20);  // 碰撞体积
+    
+    // 存储子弹信息
+    bullet.damage = Math.floor(this.myPlayer.userData.attributes.strength / 2);  // 🎯 伤害 = 力量 / 2
+    bullet.ownerId = this.myUserId;
+    bullet.direction = direction;
+    
+    console.log('🎯 [远程攻击] 发射子弹', {
+      伤害: bullet.damage,
+      力量: this.myPlayer.userData.attributes.strength,
+      敏捷: agility,
+      冷却时间: `${cooldown}ms`,
+      方向: direction > 0 ? '右' : '左',
+      位置: `(${Math.floor(bulletX)}, ${Math.floor(bulletY)})`
+    });
+    
+    // 🎯 发射动画
+    this.tweens.add({
+      targets: this.myPlayer,
+      scaleX: 0.9,
+      scaleY: 1.1,
+      duration: 100,
+      yoyo: true,
+      onComplete: () => {
+        this.myPlayer.setScale(1);
+      }
+    });
+    
+    // 🔴 通知服务器发射子弹
+    const attackData = {
+      battleId: this.battleId,
+      userId: this.myUserId,
+      x: bulletX,
+      y: bulletY,
+      direction: direction,
+      damage: bullet.damage
+    };
+    
+    console.log('📤 [发送远程攻击事件到服务器]', attackData);
+    window.networkManager.socketEmit('pvp:ranged-attack', attackData);
+    
+    // ⏱️ 冷却结束
+    this.time.delayedCall(cooldown, () => {
+      this.canRangedAttack = true;
+      console.log('✅ [远程攻击] 冷却完成');
+    });
+  }
+
+  createOpponentBullet(data) {
+    if (!this.bullets) {
+      console.error('❌ [对手子弹] bullets 组不存在！');
+      return;
+    }
+    
+    // 🔫 创建对手的子弹（让我也能看到）
+    const bulletSpeed = 600;
+    const { x, y, direction, damage, userId } = data;
+    
+    console.log('🔫 [对手子弹] 开始创建', {
+      发送者: userId,
+      我的对手: this.opponentUserId,
+      位置: `(${Math.floor(x)}, ${Math.floor(y)})`,
+      方向: direction > 0 ? '右' : '左',
+      伤害: damage
+    });
+    
+    // 🔴 创建圆形子弹
+    const bullet = this.add.circle(x, y, 10, 0xff6600);
+    bullet.setStrokeStyle(2, 0xff0000);
+    
+    // 🔴 添加物理属性并加入到 bullets 组
+    this.physics.add.existing(bullet);
+    this.bullets.add(bullet);
+    
+    // 🔴 关键：确保子弹不受重力影响
+    bullet.body.setAllowGravity(false);
+    bullet.body.setVelocityX(bulletSpeed * direction);
+    bullet.body.setVelocityY(0);
+    bullet.body.setSize(20, 20);  // 碰撞体积
+    
+    // 存储子弹信息
+    bullet.damage = damage;
+    bullet.ownerId = this.opponentUserId;
+    bullet.direction = direction;
+    
+    console.log('✅ [对手子弹] 创建成功', {
+      子弹数量: this.bullets.children.entries.length,
+      位置: `(${Math.floor(bullet.x)}, ${Math.floor(bullet.y)})`,
+      速度: `(${bullet.body.velocity.x}, ${bullet.body.velocity.y})`,
+      重力: bullet.body.allowGravity
+    });
+  }
+
+  updateBullets() {
+    if (!this.bullets || !this.bullets.children) return;
+    
+    // 检查子弹碰撞和边界
+    this.bullets.children.entries.forEach(bullet => {
+      if (!bullet || !bullet.active) return;
+      
+      // 🏗️ 检查与障碍物的碰撞
+      if (this.obstacles && this.obstacles.children) {
+        this.obstacles.children.entries.forEach(obstacle => {
+          if (this.physics.overlap(bullet, obstacle)) {
+            console.log('💥 [子弹撞墙] 位置:', Math.floor(bullet.x), Math.floor(bullet.y));
+            this.createHitEffect(bullet.x, bullet.y);
+            this.destroyBullet(bullet);
+          }
+        });
+      }
+      
+      if (!bullet.active) return;  // 如果已被障碍物销毁，跳过后续检查
+      
+      // 🎯 检查与对手的碰撞（仅检查我的子弹）
+      if (bullet.ownerId === this.myUserId) {
+        const distance = Phaser.Math.Distance.Between(
+          bullet.x, bullet.y,
+          this.opponentPlayer.x, this.opponentPlayer.y
+        );
+        
+        if (distance < 30) {  // 碰撞范围
+          console.log('🎯 [远程命中] 击中对手！', {
+            目标: this.opponentUserId,
+            伤害: bullet.damage,
+            距离: Math.floor(distance)
+          });
+          
+          this.createHitEffect(bullet.x, bullet.y);
+          this.destroyBullet(bullet);
+          
+          // 🔴 通知服务器造成伤害
+          window.networkManager.socketEmit('pvp:ranged-hit', {
+            battleId: this.battleId,
+            targetId: this.opponentUserId,
+            damage: bullet.damage
+          });
+        }
+      }
+      
+      // 🎯 检查对手子弹是否击中我
+      if (bullet.ownerId === this.opponentUserId) {
+        const distance = Phaser.Math.Distance.Between(
+          bullet.x, bullet.y,
+          this.myPlayer.x, this.myPlayer.y
+        );
+        
+        if (distance < 30) {
+          console.log('💔 [被远程击中] 对手命中我！', {
+            伤害: bullet.damage,
+            距离: Math.floor(distance)
+          });
+          
+          this.createHitEffect(bullet.x, bullet.y);
+          this.destroyBullet(bullet);
+          // 注意：伤害由服务器通过 pvp:damage 事件处理，这里只显示效果
+        }
+      }
+      
+      // 检查是否超出世界边界
+      if (bullet.x < 0 || bullet.x > 1200 || bullet.y < 0 || bullet.y > 800) {
+        this.destroyBullet(bullet);
+      }
+    });
+  }
+
+  destroyBullet(bullet) {
+    if (bullet && bullet.active) {
+      bullet.destroy();
+    }
+  }
+
+  createHitEffect(x, y) {
+    // 💥 简单的撞击效果
+    const effect = this.add.circle(x, y, 15, 0xff6600, 0.8);
+    this.tweens.add({
+      targets: effect,
+      scale: 2,
+      alpha: 0,
+      duration: 200,
+      onComplete: () => effect.destroy()
     });
   }
 
@@ -1075,11 +1383,12 @@ export class RealtimePvpScene extends Phaser.Scene {
   exitBattle() {
     console.log('🚪 [退出对战] 清理网络监听器');
     
-    // 🔴 清理所有网络监听（包括 pvp:hp:update）
+    // 🔴 清理所有网络监听
     window.networkManager.off('pvp:position');
     window.networkManager.off('pvp:attack');
     window.networkManager.off('pvp:damage');
-    window.networkManager.off('pvp:hp:update');  // 🔴 关键：清理血量更新监听器
+    window.networkManager.off('pvp:hp:update');
+    window.networkManager.off('pvp:ranged-attack');  // 🎯 远程攻击
     window.networkManager.off('pvp:end');
 
     console.log('✅ [退出对战] 网络监听器已清理');
