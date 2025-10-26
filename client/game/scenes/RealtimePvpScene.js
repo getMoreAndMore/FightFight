@@ -50,6 +50,9 @@ export class RealtimePvpScene extends Phaser.Scene {
   }
 
   create() {
+    // 🔴 关键修复：清除所有可能残留的背景
+    this.cameras.main.setBackgroundColor('#000000');
+    
     // 🔴 关键修复：使用固定的物理世界大小，确保所有客户端一致
     const WORLD_WIDTH = 1200;
     const WORLD_HEIGHT = 800;
@@ -62,13 +65,14 @@ export class RealtimePvpScene extends Phaser.Scene {
     
     console.log('🌍 [世界设置]', {
       物理世界: `${WORLD_WIDTH}x${WORLD_HEIGHT}`,
-      相机大小: `${this.cameras.main.width}x${this.cameras.main.height}`
+      相机大小: `${this.cameras.main.width}x${this.cameras.main.height}`,
+      重力: this.physics.world.gravity.y
     });
 
-    // 设置背景
-    this.cameras.main.setBackgroundColor(0x1a1a2e);
+    // 🔴 创建天空和地面背景（必须完全覆盖）
+    this.createBackground(WORLD_WIDTH, WORLD_HEIGHT);
 
-    // 创建战场地面
+    // 创建战场地面（物理碰撞）
     this.createGround(WORLD_WIDTH, WORLD_HEIGHT);
 
     // 创建标题
@@ -98,21 +102,102 @@ export class RealtimePvpScene extends Phaser.Scene {
     this.startPositionSync();
   }
 
+  createBackground(worldWidth, worldHeight) {
+    // 🔴 完全覆盖的背景矩形（防止下层场景显示）
+    const fullBackground = this.add.rectangle(0, 0, worldWidth, worldHeight, 0x000000);
+    fullBackground.setOrigin(0, 0);
+    fullBackground.setDepth(-100);  // 确保在最底层
+    
+    // 🌤️ 天空背景（渐变：从浅蓝到深蓝）
+    const skyTop = this.add.rectangle(0, 0, worldWidth, worldHeight * 0.6, 0x87ceeb);
+    skyTop.setOrigin(0, 0);
+    skyTop.setDepth(-90);
+    
+    const skyBottom = this.add.rectangle(0, worldHeight * 0.6, worldWidth, worldHeight * 0.4, 0x4a90e2);
+    skyBottom.setOrigin(0, 0);
+    skyBottom.setDepth(-90);
+    
+    // ☁️ 装饰云朵
+    this.createClouds(worldWidth, worldHeight);
+    
+    // 🌍 地面草地背景（从 60% 高度开始到底部）
+    const grassStartY = worldHeight * 0.6;  // 与天空底部对齐
+    const grassHeight = worldHeight - grassStartY;
+    
+    const grass = this.add.rectangle(
+      0,
+      grassStartY,
+      worldWidth,
+      grassHeight,
+      0x2d5016
+    );
+    grass.setOrigin(0, 0);
+    grass.setDepth(-80);
+    
+    // 地表线（浅绿色草地顶部）
+    const grassTop = this.add.rectangle(
+      0,
+      grassStartY,
+      worldWidth,
+      20,
+      0x4a7c2c
+    );
+    grassTop.setOrigin(0, 0);
+    grassTop.setDepth(-75);
+    
+    console.log('🎨 [背景创建]', {
+      天空高度: worldHeight * 0.6,
+      草地起始: grassStartY,
+      草地高度: grassHeight,
+      完全覆盖: true
+    });
+  }
+
+  createClouds(worldWidth, worldHeight) {
+    // 创建几朵简单的云
+    const cloudY = [100, 150, 200, 120, 180];
+    const cloudX = [200, 500, 800, 1000, 350];
+    
+    for (let i = 0; i < 5; i++) {
+      const cloud = this.add.ellipse(cloudX[i], cloudY[i], 80, 40, 0xffffff, 0.7);
+      cloud.setDepth(-70);  // 云朵在背景之上
+      
+      // 云朵缓慢飘动
+      this.tweens.add({
+        targets: cloud,
+        x: cloudX[i] + 50,
+        duration: 8000 + i * 1000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+    }
+  }
+
   createGround(worldWidth, worldHeight) {
-    // 🔴 使用世界坐标而不是相机坐标
+    // 🔴 物理地面（位置与视觉草地顶部对齐）
+    const grassTopY = worldHeight * 0.6;  // 草地顶部位置（与背景一致）
+    const groundHeight = 40;  // 地面厚度
+    const groundY = grassTopY + groundHeight / 2;  // 地面中心
+    
     this.ground = this.add.rectangle(
       worldWidth / 2,
-      worldHeight - 50,
+      groundY,
       worldWidth,
-      100,
-      0x654321
+      groundHeight,
+      0xff0000,  // 🔴 临时用红色可见，方便调试
+      0  // 透明度0（不可见）
     );
-    this.physics.add.existing(this.ground, true);
+    this.physics.add.existing(this.ground, true);  // true = static body
+    this.ground.setDepth(-60);
     
     console.log('🏞️ [地面创建]', {
-      x: worldWidth / 2,
-      y: worldHeight - 50,
-      width: worldWidth
+      地面中心Y: groundY,
+      地面顶部Y: groundY - groundHeight / 2,
+      地面底部Y: groundY + groundHeight / 2,
+      草地顶部Y: grassTopY,
+      地面高度: groundHeight,
+      是否静态: true
     });
   }
 
@@ -164,28 +249,39 @@ export class RealtimePvpScene extends Phaser.Scene {
       '匹配': myData.user.userId === this.myUserId
     });
     
-    // 🔴 关键修复：使用世界坐标的相对位置，确保所有客户端一致
-    const groundY = worldHeight - 100;  // 统一的地面高度（世界坐标）
+    // 🔴 关键修复：角色位置与地面顶部对齐
+    const grassTopY = worldHeight * 0.6;  // 草地顶部（与 createGround 一致）
+    const playerHeight = 60;
+    const playerY = grassTopY - playerHeight / 2;  // 角色中心应该让角色底部刚好在草地顶部
+    
     const leftX = worldWidth * 0.25;    // 左侧位置（世界坐标的25%）
     const rightX = worldWidth * 0.75;   // 右侧位置（世界坐标的75%）
     
     console.log('📍 [位置计算]', {
       世界大小: `${worldWidth}x${worldHeight}`,
-      地面Y: groundY,
+      草地顶部Y: grassTopY,
+      角色中心Y: playerY,
+      角色底部Y: playerY + playerHeight / 2,
       左侧X: leftX,
       右侧X: rightX
     });
     
     this.myPlayer = this.add.rectangle(
       leftX,  // 使用世界坐标
-      groundY,
+      playerY,  // 🔴 修正后的Y坐标
       40,
-      60,
+      playerHeight,
       0x00ff00
     );
     this.physics.add.existing(this.myPlayer);
     this.myPlayer.body.setCollideWorldBounds(true);
-    this.myPlayer.body.setBounce(0.2);
+    // 🔴 移除额外重力设置，使用全局重力配置即可
+    
+    console.log('🎮 [我的角色物理]', {
+      位置: { x: this.myPlayer.x, y: this.myPlayer.y },
+      物理体: !!this.myPlayer.body,
+      世界重力: this.physics.world.gravity.y
+    });
     
     // 🔴 从服务器传来的数据中获取血量
     this.myPlayer.maxHp = myData.maxHp || (this.player1Data.user.userId === this.myUserId ? player1MaxHp : player2MaxHp);
@@ -227,14 +323,14 @@ export class RealtimePvpScene extends Phaser.Scene {
     // 🔴 对手在右边，使用世界坐标
     this.opponentPlayer = this.add.rectangle(
       rightX,  // 使用世界坐标
-      groundY,
+      playerY,  // 🔴 使用相同的Y坐标
       40,
-      60,
+      playerHeight,
       0xff0000
     );
     this.physics.add.existing(this.opponentPlayer);
     this.opponentPlayer.body.setCollideWorldBounds(true);
-    this.opponentPlayer.body.setBounce(0.2);
+    // 🔴 移除额外重力设置，使用全局重力配置即可
     
     // 🔴 从服务器传来的数据中获取血量
     this.opponentPlayer.maxHp = opponentData.maxHp || (this.player1Data.user.userId === this.opponentUserId ? player1MaxHp : player2MaxHp);
@@ -271,6 +367,13 @@ export class RealtimePvpScene extends Phaser.Scene {
     // 添加碰撞
     this.physics.add.collider(this.myPlayer, this.ground);
     this.physics.add.collider(this.opponentPlayer, this.ground);
+    
+    // 🔴 修复地图错乱：相机跟随我的角色
+    this.cameras.main.startFollow(this.myPlayer, true, 0.1, 0.1);
+    console.log('📹 [相机设置] 相机跟随玩家', {
+      玩家位置: { x: this.myPlayer.x, y: this.myPlayer.y },
+      相机中心: { x: this.cameras.main.scrollX + this.cameras.main.width / 2, y: this.cameras.main.scrollY + this.cameras.main.height / 2 }
+    });
 
     // 攻击状态
     this.canAttack = true;
@@ -518,9 +621,16 @@ export class RealtimePvpScene extends Phaser.Scene {
       this.myPlayer.body.setVelocityX(0);
     }
 
-    // 跳跃
-    if ((this.cursors.up.isDown || this.keys.W.isDown) && this.myPlayer.body.touching.down) {
+    // 跳跃（增加调试日志）
+    const isJumpKeyPressed = this.cursors.up.isDown || this.keys.W.isDown;
+    const isTouchingGround = this.myPlayer.body.touching.down || this.myPlayer.body.blocked.down;
+    
+    if (isJumpKeyPressed && isTouchingGround) {
       this.myPlayer.body.setVelocityY(-500);
+      console.log('🦘 [跳跃] 跳跃触发！', {
+        velocityY: this.myPlayer.body.velocity.y,
+        位置: { x: Math.floor(this.myPlayer.x), y: Math.floor(this.myPlayer.y) }
+      });
     }
 
     // 攻击
